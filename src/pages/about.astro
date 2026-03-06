@@ -2,43 +2,45 @@
 import PageLayout from '../layouts/PageLayout.astro';
 ---
 
-<PageLayout title="About" description="About b4rt and dumpthecore — a developer blog about Linux, systems, and debugging.">
+<PageLayout title="About" description="About b4rt and dumpthecore — a developer blog about Linux, systems, cloud, and debugging.">
   <h1 style="font-family: var(--font-display); font-size: clamp(2rem, 5vw, 3rem); font-weight: 600; letter-spacing: -0.03em; color: var(--text); margin-bottom: 2rem;">
     About
   </h1>
 
   <div class="prose prose-neutral max-w-none">
+    <h2>About me</h2>
     <p>
-      Hey — I'm <strong>b4rt</strong>. I work on systems software: Linux kernel internals, embedded devices, networking stacks, and the kind of code that runs quietly until it doesn't.
+      Hi, I'm <strong>b4rt</strong>. I work with software, Linux, cloud, systems, and infrastructure. Basically, I spend my time solving real problems and, from time to time, creating entirely new ones.
     </p>
-
     <p>
-      This blog is called <strong>dumpthecore</strong> because when a process crashes hard enough, the OS writes a core dump — a raw snapshot of everything at the moment of failure. That's the aesthetic here: raw, unfiltered notes on things I've built, debugged, and occasionally destroyed.
+      Dump The Core exists because I like understanding how things work underneath: services, networks, containers, systems, automation, security, hardware, IoT, and anything else that seems like a good idea at 2am.
     </p>
 
     <h2>What I write about</h2>
-    <ul>
-      <li><strong>Linux internals</strong> — scheduling, memory, syscalls, eBPF</li>
-      <li><strong>Debugging</strong> — profilers, tracers, sanitizers, the whole toolkit</li>
-      <li><strong>Systems design</strong> — how distributed systems actually work</li>
-      <li><strong>C and Rust</strong> — the languages where mistakes are interesting</li>
-      <li><strong>Tools</strong> — anything that makes me faster or less wrong</li>
-    </ul>
+    <p>
+      Posts about Linux, cloud, debugging, backend, security, automation, IoT, electronics, and failures with a lot of educational value once they're over.
+    </p>
 
     <h2>The setup</h2>
     <p>
-      This site is built with <a href="https://astro.build">Astro 5</a> and MDX. Content lives in git.
-      No CMS, no database, no JavaScript unless it's earning its place.
-      Hosted on Cloudflare Pages.
+      Astro, MDX, git, and Cloudflare. No CMS. No database. No extra fluff. Just text, ideas, and the occasional bad decision pushed to production.
+    </p>
+    <p>
+      Yes, there's also a light theme. It exists for legal reasons.<br />
+      And yes, I use Arch, btw.
     </p>
 
-    <h2>Get in touch</h2>
+    <h2>Contact</h2>
     <p>
-      No social media. If you want to reach me, the best way is through the content — write about something I wrote, link to it, and I'll probably find it. Or open an issue on whatever I've broken.
+      I can't promise a fast reply, but I can promise that if something breaks, there's a good chance I'll end up writing about it.
+    </p>
+    <p>
+      <a href="mailto:b4rt@linux.com">b4rt@linux.com</a>
     </p>
 
+    <h2>RSS</h2>
     <p>
-      Subscribe via <a href="/rss.xml">RSS</a> — it's the only feed that matters.
+      Yes, there's <a href="/rss.xml">RSS</a>. As it should be.
     </p>
   </div>
 </PageLayout>

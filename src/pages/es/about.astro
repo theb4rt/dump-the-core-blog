@@ -2,43 +2,45 @@
 import PageLayout from '../../layouts/PageLayout.astro';
 ---
 
-<PageLayout title="Sobre mí" description="Sobre b4rt y dumpthecore — un blog de desarrollador sobre Linux, sistemas y debugging." lang="es">
+<PageLayout title="Sobre mí" description="Sobre b4rt y dumpthecore — un blog sobre Linux, sistemas, cloud y debugging." lang="es">
   <h1 style="font-family: var(--font-display); font-size: clamp(2rem, 5vw, 3rem); font-weight: 600; letter-spacing: -0.03em; color: var(--text); margin-bottom: 2rem;">
     Sobre mí
   </h1>
 
   <div class="prose prose-neutral max-w-none">
+    <h2>Sobre mí</h2>
     <p>
-      Hola — soy <strong>b4rt</strong>. Trabajo en software de sistemas: internos del kernel de Linux, dispositivos embebidos, pilas de red y el tipo de código que funciona en silencio hasta que deja de hacerlo.
+      Hola, soy <strong>b4rt</strong>. Trabajo con software, Linux, cloud, sistemas e infraestructura. Básicamente, me dedico a resolver problemas reales y, de vez en cuando, a crear otros completamente nuevos.
     </p>
-
     <p>
-      Este blog se llama <strong>dumpthecore</strong> porque cuando un proceso falla con suficiente fuerza, el sistema operativo escribe un core dump — una instantánea en bruto de todo en el momento del fallo. Esa es la estética aquí: notas sin filtros sobre cosas que he construido, depurado y ocasionalmente destruido.
+      Dump The Core existe porque me gusta entender cómo funcionan las cosas por dentro: servicios, redes, contenedores, sistemas, automatización, seguridad, hardware, IoT y cualquier otra cosa que parezca una buena idea a las 2am.
     </p>
 
     <h2>Sobre lo que escribo</h2>
-    <ul>
-      <li><strong>Internos de Linux</strong> — scheduling, memoria, syscalls, eBPF</li>
-      <li><strong>Debugging</strong> — profilers, tracers, sanitizers, todo el toolkit</li>
-      <li><strong>Diseño de sistemas</strong> — cómo funcionan realmente los sistemas distribuidos</li>
-      <li><strong>C y Rust</strong> — los lenguajes donde los errores son interesantes</li>
-      <li><strong>Herramientas</strong> — todo lo que me hace más rápido o menos equivocado</li>
-    </ul>
+    <p>
+      Posts sobre Linux, cloud, debugging, backend, seguridad, automatización, IoT, electrónica y fallos con muchísimo valor educativo cuando ya dejaron de doler.
+    </p>
 
     <h2>El setup</h2>
     <p>
-      Este sitio está construido con <a href="https://astro.build">Astro 5</a> y MDX. El contenido vive en git.
-      Sin CMS, sin base de datos, sin JavaScript a menos que se lo gane.
-      Alojado en Cloudflare Pages.
+      Astro, MDX, git y Cloudflare. Sin CMS. Sin base de datos. Sin adornos innecesarios. Solo texto, ideas y, de vez en cuando, una mala decisión desplegada en producción.
+    </p>
+    <p>
+      Sí, también hay tema light. Existe por razones legales.<br />
+      Y sí, uso Arch btw.
     </p>
 
     <h2>Contacto</h2>
     <p>
-      Sin redes sociales. Si quieres contactarme, la mejor forma es a través del contenido — escribe sobre algo que escribí, enlázalo y probablemente lo encuentre. O abre un issue en lo que haya roto.
+      No prometo responder rápido, pero sí que si algo se rompe, hay buenas probabilidades de que termine escribiendo sobre eso.
+    </p>
+    <p>
+      <a href="mailto:b4rt@linux.com">b4rt@linux.com</a>
     </p>
 
+    <h2>RSS</h2>
     <p>
-      Suscríbete via <a href="/rss.xml">RSS</a> — es el único feed que importa.
+      Sí, hay <a href="/rss.xml">RSS</a>. Como debe ser.
     </p>
   </div>
 </PageLayout>
