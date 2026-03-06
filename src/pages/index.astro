@@ -89,7 +89,8 @@ const heroColor = heroCatColors[heroCategory] ?? '#3b82f6';
               </div>
               <pre class="code-content"><code
 ><span class="zsh-prompt"><span class="p-user">b4rt</span><span class="p-at">@</span><span class="p-host">arch</span> <span class="p-dir">~</span> <span class="p-sym">❯</span></span> <span style="color:#e0e0e0">uname -a</span>
-<span style="color:#888">Linux arch 6.12.0 #1 SMP PREEMPT_DYNAMIC x86_64 GNU/Linux</span>
+<span style="color:#888">Linux b4rt 6.18.13-arch1-1 #1 SMP PREEMPT_DYNAMIC
+<span id="uname-time"></span> x86_64 GNU/Linux</span>
 
 <span class="zsh-prompt"><span class="p-user">b4rt</span><span class="p-at">@</span><span class="p-host">arch</span> <span class="p-dir">~/blog</span> <span class="p-sym">❯</span></span> <span style="color:#e0e0e0">cat about.txt</span>
 <span style={`color:${heroColor}`}>  systems • linux • debugging</span>
@@ -486,3 +487,20 @@ const heroColor = heroCatColors[heroCategory] ?? '#3b82f6';
 
   .newsletter-wrap { margin-top: 1rem; }
 </style>
+
+<script>
+  const el = document.getElementById('uname-time');
+  if (el) {
+    const now = new Date();
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const day = days[now.getUTCDay()];
+    const date = String(now.getUTCDate()).padStart(2, '0');
+    const month = months[now.getUTCMonth()];
+    const year = now.getUTCFullYear();
+    const hh = String(now.getUTCHours()).padStart(2, '0');
+    const mm = String(now.getUTCMinutes()).padStart(2, '0');
+    const ss = String(now.getUTCSeconds()).padStart(2, '0');
+    el.textContent = `${day}, ${date} ${month} ${year} ${hh}:${mm}:${ss} +0000`;
+  }
+</script>
