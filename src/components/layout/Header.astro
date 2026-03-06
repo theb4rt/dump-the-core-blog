@@ -33,7 +33,7 @@ const esHref = isEs ? currentPath : (
   <div class="header-inner">
     <!-- Logo -->
     <a href="/" class="logo" aria-label="dumpthecore home">
-      <span class="logo-main">dump</span><span class="logo-accent">the</span><span class="logo-main">core</span>
+      <img src="/images/brand-logo.png" class="logo-img" alt="dumpthecore" />
     </a>
 
     <!-- Desktop nav -->
@@ -138,6 +138,7 @@ const esHref = isEs ? currentPath : (
     background: color-mix(in srgb, var(--bg) 92%, transparent);
     backdrop-filter: blur(16px);
     border-bottom: 1px solid var(--border);
+    overflow: visible;
   }
 
   .accent-bar {
@@ -159,15 +160,19 @@ const esHref = isEs ? currentPath : (
 
   .logo {
     text-decoration: none;
-    font-family: var(--font-display);
-    font-weight: 800;
-    font-size: 1.2rem;
-    letter-spacing: -0.03em;
+    display: flex;
+    align-items: center;
     flex-shrink: 0;
-    text-transform: uppercase;
+    transform: translateY(8px);
+    z-index: 41;
+    position: relative;
   }
-  .logo-main  { color: var(--text); }
-  .logo-accent { color: var(--accent); }
+
+  .logo-img {
+    max-width: 250px;
+    height: auto;
+    object-fit: contain;
+  }
 
   .desktop-nav {
     display: none;
