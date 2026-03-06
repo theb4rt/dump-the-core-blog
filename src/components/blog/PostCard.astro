@@ -5,6 +5,7 @@ import { formatDate } from '../../utils/date';
 import { getReadingTime } from '../../utils/reading-time';
 import { getPostSlug } from '../../utils/slug';
 import { useTranslations } from '../../i18n';
+import PostCardStats from './PostCardStats';
 
 interface Props {
   post: AnyPost;
@@ -14,7 +15,8 @@ interface Props {
 
 const { post, featured = false, lang } = Astro.props;
 const T = useTranslations(lang ?? post.data.lang ?? 'en');
-const { title, description, pubDate, category, tags, author, coverImage } = post.data;
+const { title, description, pubDate, category, tags, author, coverImage, translationKey } = post.data;
+const statsKey = translationKey ?? getPostSlug(post);
 const readingTime = getReadingTime(post.body ?? '');
 const basePath = (lang ?? post.data.lang) === 'es' ? '/es/blog' : '/blog';
 const slug = `${basePath}/${getPostSlug(post)}`;
@@ -100,6 +102,9 @@ const initials = (author ?? 'b4rt')
         </svg>
       </a>
     </div>
+
+    <!-- Stats: likes + views -->
+    <PostCardStats slug={statsKey} client:load />
   </div>
 </article>
 

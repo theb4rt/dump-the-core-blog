@@ -48,6 +48,9 @@ const en = {
     tags: 'Tags:',
     series: 'Series',
     part: 'Part',
+    likes: 'Likes',
+    views: 'Views',
+    comments: 'Comments',
   },
   common: {
     posts: (n: number) => `${n} post${n !== 1 ? 's' : ''}`,
@@ -103,6 +106,9 @@ const es: typeof en = {
     tags: 'Etiquetas:',
     series: 'Serie',
     part: 'Parte',
+    likes: 'Me gusta',
+    views: 'Vistas',
+    comments: 'Comentarios',
   },
   common: {
     posts: (n: number) => `${n} post${n !== 1 ? 's' : ''}`,

@@ -6,6 +6,8 @@ import TableOfContents from '../components/blog/TableOfContents.astro';
 import Newsletter from '../components/ui/Newsletter.astro';
 import ShareButtons from '../components/blog/ShareButtons.astro';
 import LangSwitcher from '../components/blog/LangSwitcher.astro';
+import PostReactions from '../components/blog/PostReactions';
+import GiscusComments from '../components/blog/GiscusComments';
 import { getPostSlug } from '../utils/slug';
 import { formatDate } from '../utils/date';
 import { getReadingTime } from '../utils/reading-time';
@@ -54,6 +56,7 @@ if (series) {
 
 const readingTime = getReadingTime(post.body ?? '');
 const T = useTranslations(lang);
+const statsKey = post.data.translationKey ?? getPostSlug(post);
 ---
 
 <BaseLayout
@@ -190,6 +193,12 @@ const T = useTranslations(lang);
             ))}
           </div>
         )}
+
+        <!-- Reactions: likes + views -->
+        <PostReactions slug={statsKey} client:load />
+
+        <!-- Comments -->
+        <GiscusComments lang={lang} client:load />
 
         <!-- Newsletter -->
         <Newsletter />
