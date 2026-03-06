@@ -83,7 +83,7 @@ export default function PostReactions({ slug }: Props) {
           const el = e.currentTarget;
           el.style.borderColor = 'var(--accent)';
           el.style.color = 'var(--accent)';
-          el.style.background = 'color-mix(in srgb, var(--accent) 8%, transparent)';
+          el.style.background = 'color-mix(in srgb, var(--accent) 0%, transparent)';
         }}
         onMouseLeave={(e) => {
           if (liked) return;
