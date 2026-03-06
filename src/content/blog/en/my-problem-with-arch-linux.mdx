@@ -1,0 +1,127 @@
+---
+title: "My problem with Arch Linux"
+description: "How I fixed a broken GRUB on a fully encrypted Arch Linux disk after a bad config change."
+pubDate: 2023-05-05
+category: "Linux"
+tags: ["arch", "linux", "grub", "luks", "boot", "encrypted", "repair", "mount"]
+featured: false
+author: "b4rt"
+slug: "my-problem-with-arch-linux"
+lang: "en"
+translationKey: "my-problem-with-arch-linux"
+coverImage: "/images/posts/arch-linux.jpg"
+---
+
+import Callout from '../../../components/ui/Callout.astro';
+
+Last week, I had a problem with my Arch Linux installation. I have been using Arch for over 4 years, and I must say that it is the most stable distribution that I have used in over 14 years. However, I made a mistake by modifying the Grub config (I hate you Nvidia, I hate you).
+
+I have a somewhat special installation of Arch Linux with a fully encrypted disk over GPT, which caused one of the problems. First of all, after modifying the Grub config, I saved and updated it and then restarted my PC (at least I had saved a backup of my old Grub config). After that, I only had an infinite loop of reboots on my computer.
+
+Normally, you would have a message to decrypt your disk, and then the Grub would be displayed. However, after my changes, after entering my decryption password, Grub just crashed, and my PC started to reboot.
+
+```
+Attempting to decrypt master key…
+Enter passphrase for hd1, gpt2.
+```
+
+To repair this issue, you need to reinstall GRUB, and in my case, the following were the necessary steps:
+
+---
+
+## Step 1 — Boot a Live CD of Arch Linux
+
+Boot from an Arch Linux ISO. Any recent one will do.
+
+## Step 2 — Identify the encrypted partition
+
+Use `lsblk` to identify the encrypted partition.
+
+```bash
+lsblk
+```
+
+## Step 3 — Unlock the encrypted partition
+
+```bash
+cryptsetup luksOpen /dev/sda1 cryptdiskb4rt
+```
+
+## Step 4 — Scan for LVM volume groups
+
+Use `vgscan` to detect the LVM volume group from this encrypted partition.
+
+```bash
+vgscan
+```
+
+## Step 5 — Activate the volume group
+
+```bash
+vgchange -ay
+```
+
+## Step 6 — Find your root logical volume
+
+Use `lvscan` to get the LVM name from your root filesystem. You will get something like this:
+
+```
+ACTIVE '/dev/vg/swap' [8.00 GiB] inherit
+ACTIVE '/dev/vg/root' [500.00 GiB] inherit
+ACTIVE '/dev/vg/home' [1.32 TiB] inherit
+```
+
+## Step 7 — Mount your root volume
+
+```bash
+mount /dev/vg/root /mnt
+```
+
+## Step 8 — Bind mount the virtual filesystems
+
+Don't forget to mount these — GRUB reinstall needs them:
+
+```bash
+mount --bind /dev /mnt/dev
+mount --bind /sys /mnt/sys
+mount --bind /proc /mnt/proc
+```
+
+## Step 9 — Chroot into your Arch installation
+
+```bash
+chroot /mnt /bin/bash
+```
+
+## Step 10 — Reinstall GRUB
+
+```bash
+grub-install /dev/sda
+```
+
+## Step 11 — Rollback your configuration
+
+Edit and rollback your configuration from `/etc/default/grub` to the last known good state. If you saved a backup (you did, right?), now is the time to use it.
+
+## Step 12 — Regenerate the GRUB config
+
+```bash
+grub-mkconfig -o /boot/grub/grub.cfg
+```
+
+## Step 13 — Exit and reboot
+
+Exit the chroot and reboot:
+
+```bash
+exit
+reboot
+```
+
+---
+
+After that, finally I'm able to use my PC again.
+
+<Callout type="warning">
+  Never edit the GRUB configuration unless you know 100% that you are not going to screw up your distro. Always keep a backup of your working `/etc/default/grub` before making changes.
+</Callout>

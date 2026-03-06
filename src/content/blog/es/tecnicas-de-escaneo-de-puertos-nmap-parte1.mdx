@@ -1,0 +1,164 @@
+---
+title: "Técnicas de escaneo de puertos con Nmap"
+slug: "nmap-part-1"
+description: "Guía de las principales técnicas de escaneo de Nmap: TCP Connect, SYN, Idle, ACK, X-Mas y Null scan."
+pubDate: 2019-04-18
+updatedDate: 2019-06-06
+category: "Security"
+tags: ["nmap", "hacking", "seguridad", "puertos", "tcp", "pentest", "linux"]
+featured: false
+author: "b4rt"
+lang: "es"
+translationKey: "nmap-part-1"
+series: "Nmap"
+seriesOrder: 1
+coverImage: "/images/posts/nmap-1.jpg"
+---
+
+import Callout from '../../../components/ui/Callout.astro';
+
+En la fase del reconocimiento activo (al momento de realizar un pentest) empezamos a realizar procedimientos que interactúen directamente con el sistema que estamos analizando.
+
+Los objetivos de esta fase son:
+
+- Identificar sistemas activos
+- Identificar puertos abiertos
+- Identificar servicios y versiones en esos puertos abiertos
+- Identificar sistemas operativos
+
+Para esto, usaremos **Nmap**, una grandiosa herramienta de código abierto para realizar auditorías de red, escanear puertos y, en algunos casos, explotar vulnerabilidades utilizando scripts.
+
+<Callout type="info">
+  Nmap no requiere privilegios de root para ejecutarse. La herramienta se adapta a los privilegios de la cuenta desde la que se ejecute. Por defecto, en una cuenta sin privilegios usa el escaneo `-sT` y con root usa `-sS`.
+</Callout>
+
+## Uso básico
+
+Por defecto, Nmap escanea los 1000 puertos más comunes para la mayoría de servicios:
+
+```bash
+nmap [ip]
+```
+
+Nmap nos devuelve la lista de puertos abiertos que ha encontrado y el servicio que corre en esos puertos.
+
+Nmap define **6 estados** para los puertos:
+
+| Estado | Descripción |
+|---|---|
+| `open` | El puerto acepta conexiones |
+| `closed` | El puerto es accesible pero no hay servicio escuchando |
+| `filtered` | Un firewall o filtro impide que Nmap determine el estado |
+| `unfiltered` | El puerto es accesible, pero no se puede determinar si está abierto o cerrado |
+| `open\|filtered` | No se puede determinar si está abierto o filtrado |
+| `closed\|filtered` | No se puede determinar si está cerrado o filtrado |
+
+---
+
+## TCP Connect Scan (-sT)
+
+Esta técnica tiene el comportamiento normal que ocurre al establecer una conexión TCP: utiliza el **saludo de 3 vías** (SYN → SYN/ACK → ACK).
+
+Esto tiene ventajas y desventajas: el hecho de establecer el saludo de 3 vías no es nada sigiloso, además de ser un poco más lento, lo que hace que la detección del escaneo sea más fácil. Sin embargo, tiene una muy baja probabilidad de arrojarnos falsos positivos.
+
+Es el escaneo que se ejecuta **por defecto en una cuenta sin privilegios**:
+
+```bash
+nmap -sT 192.168.1.165
+```
+
+---
+
+## TCP SYN Scan (-sS)
+
+Este tipo de análisis **no llega a establecer el saludo de tres vías**. Se envía un paquete SYN, como en una conexión normal, pero todo cambia al recibir una respuesta:
+
+- Si se recibe un paquete **SYN/ACK** → el puerto está **abierto**.
+- Si se recibe un **RST** → el puerto está **cerrado**.
+- Si no se recibe ninguna respuesta o se recibe un error ICMP → el puerto está **filtrado**.
+
+Es un tipo de escaneo muy confiable y además muy sigiloso. Es el escaneo que se ejecuta **por defecto con privilegios de administrador**.
+
+Si tratamos de utilizarlo en una cuenta sin privilegios:
+
+```bash
+nmap -sS 192.168.1.165
+# You requested a scan type which requires root privileges.
+# QUITTING!
+```
+
+---
+
+## TCP Idle Scan (-sI)
+
+El **Idle Scan** es uno de los tipos de escaneo más complejos que existen, y depende mucho de la máquina que elijamos para hacer el papel de zombie.
+
+El ataque es muy difícil de ser detectado pues ningún paquete es enviado directamente a la dirección de origen. Además, puede saltarse distintos controles que filtran paquetes para evitar la conexión con equipos fuera de la red, pues se "suplanta" la identidad de un equipo que sí tiene permisos en esa red.
+
+Necesitamos un escenario de al menos 3 máquinas: el **atacante**, la **víctima**, y una que usaremos como **zombie**.
+
+El proceso es el siguiente:
+
+1. Primero debemos identificar que la máquina zombie utilice un **algoritmo de ID de IP predecible** (IDs consecutivos o sucesivos).
+2. Nos aseguramos de que la máquina zombie **no tenga tráfico**, pues de otra forma el escaneo sería inviable.
+3. Realizamos **IP Spoofing** enviando múltiples paquetes SYN hacia la víctima con la IP del zombie.
+4. Los paquetes de respuesta de la víctima se dirigen hacia el zombie, no hacia nosotros.
+5. Preguntamos por el ID de los paquetes al zombie:
+   - Si el ID se ha **incrementado** en el número previamente identificado → el puerto está **abierto**.
+   - Si el ID es el **mismo** → el puerto está **cerrado**.
+
+```bash
+nmap -sI [IP_ZOMBIE] [IP_VICTIMA]
+```
+
+<Callout type="warning">
+  Este ejemplo es muy básico. El Idle Scan es uno de los tipos de escaneo más peligrosos y complejos que existen. La [documentación oficial de Nmap](https://nmap.org/book/idlescan.html) lo explica muy bien en detalle.
+</Callout>
+
+---
+
+## TCP ACK Scan (-sA)
+
+Esta técnica **no se usa específicamente para detectar el estado de un puerto**, sino para **verificar el estado del firewall**.
+
+Si se envía un paquete ACK en una conexión normal, no haría nada. Si el firewall no guardase el estado de las conexiones, dejaría pasar el paquete sin problemas. Ocurrirán dos cosas:
+
+- Si el puerto está **abierto** → normalmente el sistema no respondería nada.
+- Si el puerto está **cerrado** → se responderá un RST.
+
+De esta forma podemos saber si el puerto está abierto o cerrado y, además, si el firewall guarda o no el estado de las conexiones:
+
+```bash
+nmap -sA [IP]
+```
+
+---
+
+## TCP X-Mas Scan (-sX)
+
+Esta técnica se basa en el envío de un paquete con los flags **FIN, URG y PSH** activos (como un árbol de navidad encendido, de ahí el nombre).
+
+Actualmente Windows no responde a esta técnica. En sistemas Unix/Linux:
+- Si el puerto está **cerrado** → se responde RST+ACK.
+- Si el puerto está **abierto** → no hay respuesta.
+
+```bash
+nmap -sX [IP]
+```
+
+---
+
+## TCP Null Scan (-sN)
+
+Este tipo de escaneo envía un paquete que **no contiene ningún bit** de flag activado.
+
+- Si el puerto está **abierto** → no se recibe respuesta.
+- Si el puerto está **cerrado** → el sistema responde con RST + ACK.
+
+```bash
+nmap -sN [IP]
+```
+
+---
+
+Te recomendaría leer sobre TCP/IP, los puertos comunes y sus servicios. De esta forma te será más fácil comprender la segunda parte, donde veremos cómo obtener información detallada de los servicios con `-sV`, `-O` y los scripts de Nmap.

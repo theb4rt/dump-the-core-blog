@@ -1,0 +1,148 @@
+---
+title: "Scanning with Nmap: Gathering Info"
+slug: "nmap-part-2"
+description: "A practical Nmap scanning strategy: service fingerprinting, OS detection, timing control, and advanced flags."
+pubDate: 2019-05-30
+category: "Security"
+tags: ["nmap", "hacking", "security", "ports", "tcp", "pentest", "linux", "fingerprint"]
+featured: false
+author: "b4rt"
+lang: "en"
+translationKey: "nmap-part-2"
+series: "Nmap"
+seriesOrder: 2
+coverImage: "/images/posts/nmap-2.jpg"
+---
+
+import Callout from '../../../components/ui/Callout.astro';
+
+## Gathering Information with Nmap
+
+The sequence of commands we'll use is more of a recommendation than a standard. The strategy is as follows:
+
+1. Run a default scan using **Nmap's top 1000 ports**.
+2. Run a scan of all **65535 ports**.
+3. Once we have mapped the open ports, list them and use other arguments like `-sV`, `-O`, `-sC`.
+4. With the versions, OS, and characteristics of each port and service, use **Nmap scripts**.
+
+---
+
+## Step 1 — Default scan
+
+The first step is to run a default scan against Nmap's most common port list:
+
+```bash
+nmap -Pn 192.168.1.28 -vv --reason
+```
+
+Flags used:
+
+| Flag | Description |
+|---|---|
+| `-Pn` | Skip host discovery when we already know the host is up |
+| `-vv` | Verbosity level 2 in the command output |
+| `--reason` | Shows why each port is in its reported state |
+
+<Callout type="tip">
+  The `-vv` and `--reason` flags help when a certain type of scan yields unexpected results and we need more information about port states.
+</Callout>
+
+In the quick scan results we can observe:
+- The `-sS` scan was used (the 3-way handshake was not completed).
+- With `--reason` we see the justification for each port's state.
+- 3 open ports and one filtered were detected.
+
+---
+
+## Step 2 — Full scan of all 65535 ports
+
+The next step is to scan **all** ports:
+
+```bash
+nmap 192.168.1.28 -T4 -p 1-65535 -vv --reason
+```
+
+Additional flags:
+
+| Flag | Description |
+|---|---|
+| `-T4` | Timing control. Default is T3. Higher number = more aggressive and less precise |
+| `-p 1-65535` | Port range to scan |
+| `--open` | Shows only open ports, useful to reduce time on large scans |
+
+In the results we can see that, besides the 3 previous ports, a new one was detected (48500) — open but with no service name identified.
+
+<Callout type="info">
+  If the 65535 port scan had taken several hours, we would have used the initial scan to analyze information while the second scan was running. That's why the two-step strategy makes a lot of sense.
+</Callout>
+
+---
+
+## Step 3 — Service fingerprinting and OS detection
+
+Once open ports are identified, we analyze them with `-sV` and `-O` to get versions and operating system:
+
+```bash
+nmap 192.168.1.28 -p 21,22,80,48500 -sV -O -vv --reason
+```
+
+Flags:
+
+| Flag | Description |
+|---|---|
+| `-p` | Ports separated by commas |
+| `-sV` | Nmap fingerprints ports to obtain service versions and names |
+| `-O` | Attempts to identify the operating system and version |
+
+Observations from the results:
+- Fingerprinting identified that port 48500 was running **PostgreSQL**.
+- The system was identified as **Linux**.
+- The **OpenSSH** service helped determine it was specifically a **Debian** system.
+
+<Callout type="warning">
+  OS detection with `-O` is not very precise. In many cases it's preferable to infer the OS by analyzing the banner of a service like SSH, which often includes the distribution and version.
+</Callout>
+
+---
+
+## Advanced timing control
+
+We need to consider **time** when scanning and combine parameters correctly. Two very useful flags:
+
+| Flag | Description |
+|---|---|
+| `--host-timeout` | Maximum time given to Nmap to gather host information. Less time = less accurate scan |
+| `--max-retries` | How many times Nmap will probe a given port |
+
+Some examples:
+
+```bash
+# Scan with 60-minute timeout and 10 retries
+nmap 192.168.1.28 --host-timeout 60m --max-retries 10 -vv --reason
+
+# Full port scan with 2-hour timeout
+nmap 192.168.1.28 -p 1-65535 --host-timeout 120m --max-retries 5 -vvv --reason
+```
+
+---
+
+## Nmap timing templates
+
+Using timing well is vital — rushing can cause Nmap to not work correctly. Also, we don't always want to use `-T5` — it's easily detectable and, being very fast, tends to fail on unreliable networks. The Nmap author recommends using **-T4**.
+
+| Template | Name | Description |
+|---|---|---|
+| `-T0` | Paranoid | Very slow, designed to evade IDS |
+| `-T1` | Sneaky | Slow, for evading detection |
+| `-T2` | Polite | Slower than normal to reduce network load |
+| `-T3` | Normal | Default behavior |
+| `-T4` | Aggressive | Faster, assumes a fast and reliable network |
+| `-T5` | Insane | Extremely fast, may miss information |
+
+<Callout type="tip">
+  To evade IDS or IPS, prefer `-T1` or `-T0`. For lab environments or audits on your own networks, `-T4` is the optimal balance between speed and accuracy.
+</Callout>
+
+---
+
+In the next post we'll see how to use **Nmap Scripts (NSE)** for more advanced analysis, because as I mentioned at the start, Nmap isn't just for gathering information…

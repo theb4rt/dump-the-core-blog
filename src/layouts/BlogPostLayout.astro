@@ -1,0 +1,226 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { getCollection } from 'astro:content';
+import BaseLayout from './BaseLayout.astro';
+import TableOfContents from '../components/blog/TableOfContents.astro';
+import Newsletter from '../components/ui/Newsletter.astro';
+import ShareButtons from '../components/blog/ShareButtons.astro';
+import LangSwitcher from '../components/blog/LangSwitcher.astro';
+import { getPostSlug } from '../utils/slug';
+import { formatDate } from '../utils/date';
+import { getReadingTime } from '../utils/reading-time';
+import { useTranslations } from '../i18n';
+
+interface Props {
+  post: CollectionEntry<'blogEn'> | CollectionEntry<'blogEs'>;
+  headings: { depth: number; slug: string; text: string }[];
+}
+
+const { post, headings } = Astro.props;
+const { title, description, pubDate, updatedDate, author, tags, category, coverImage, coverAlt, series, seriesOrder } = post.data;
+const lang = post.data.lang ?? 'en';
+const basePath = lang === 'es' ? '/es/blog' : '/blog';
+const langCollection = lang === 'es' ? 'blogEs' : 'blogEn';
+
+// Lang switcher: find alternate translation
+let enUrl: string | null = null;
+let esUrl: string | null = null;
+if (post.data.translationKey) {
+  const enPosts = await getCollection('blogEn', (p) => !p.data.draft && p.data.translationKey === post.data.translationKey);
+  const esPosts = await getCollection('blogEs', (p) => !p.data.draft && p.data.translationKey === post.data.translationKey);
+  const enPost = enPosts[0];
+  const esPost = esPosts[0];
+  if (enPost) enUrl = `/blog/${getPostSlug(enPost)}`;
+  if (esPost) esUrl = `/es/blog/${getPostSlug(esPost)}`;
+}
+
+// hreflang for SEO
+const hreflangAlternate = (enUrl && esUrl)
+  ? [
+      { hreflang: 'en', href: `https://dumpthecore.com${enUrl}` },
+      { hreflang: 'es', href: `https://dumpthecore.com${esUrl}` },
+      { hreflang: 'x-default', href: `https://dumpthecore.com${enUrl}` },
+    ]
+  : undefined;
+
+// Series nav — only same language
+let seriesPosts: (CollectionEntry<'blogEn'> | CollectionEntry<'blogEs'>)[] = [];
+if (series) {
+  const all = lang === 'es'
+    ? await getCollection('blogEs', (p) => !p.data.draft && p.data.series === series)
+    : await getCollection('blogEn', (p) => !p.data.draft && p.data.series === series);
+  seriesPosts = all.sort((a, b) => (a.data.seriesOrder ?? 0) - (b.data.seriesOrder ?? 0));
+}
+
+const readingTime = getReadingTime(post.body ?? '');
+const T = useTranslations(lang);
+---
+
+<BaseLayout
+  title={`${title} — dumpthecore`}
+  description={description}
+  type="article"
+  pubDate={pubDate}
+  updatedDate={updatedDate}
+  author={author}
+  tags={tags}
+  image={coverImage}
+  lang={lang}
+  hreflangAlternate={hreflangAlternate}
+>
+  <ShareButtons title={title} url={new URL(`/blog/${getPostSlug(post)}`, Astro.site ?? 'https://dumpthecore.com').href} />
+  <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-12">
+    <div class="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-12">
+      <!-- Main content -->
+      <article>
+        <!-- Back link -->
+        <a
+          href={basePath}
+          style="display: inline-flex; align-items: center; gap: 0.375rem; font-size: 0.875rem; color: var(--text-muted); text-decoration: none; margin-bottom: 2rem; transition: color 0.15s;"
+          onmouseover="this.style.color='var(--accent)'"
+          onmouseout="this.style.color='var(--text-muted)'"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m15 18-6-6 6-6"/>
+          </svg>
+          {T.post.back}
+        </a>
+
+        <!-- Cover image -->
+        {coverImage && (
+          <div style="margin-bottom: 2rem; border-radius: 12px; overflow: hidden; border: 1px solid var(--border);">
+            <img
+              src={coverImage}
+              alt={coverAlt ?? title}
+              style="width: 100%; height: auto; display: block;"
+            />
+          </div>
+        )}
+
+        <!-- Header -->
+        <header style="margin-bottom: 2.5rem;">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+            {category && (
+              <a
+                href={`/categories/${category.toLowerCase().replace(/\s+/g, '-')}`}
+                style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); text-decoration: none; padding: 0.2em 0.6em; background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 4px;"
+              >
+                {category}
+              </a>
+            )}
+            {series && (
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">
+                {series} — {T.post.part} {seriesOrder}
+              </span>
+            )}
+            <LangSwitcher currentLang={lang} enUrl={enUrl} esUrl={esUrl} />
+          </div>
+
+          <h1 style="font-family: var(--font-display); font-size: clamp(1.75rem, 4vw, 2.75rem); font-weight: 600; letter-spacing: -0.03em; color: var(--text); line-height: 1.2; margin-bottom: 1rem;">
+            {title}
+          </h1>
+
+          <p style="font-size: 1.05rem; color: var(--text-muted); line-height: 1.6; margin-bottom: 1.25rem;">
+            {description}
+          </p>
+
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; font-size: 0.825rem; color: var(--text-muted); padding-bottom: 1.5rem; border-bottom: 1px solid var(--border);">
+            <span>
+              <time datetime={pubDate.toISOString()}>{formatDate(pubDate)}</time>
+              {updatedDate && (
+                <span style="margin-left: 0.5rem; font-style: italic;">
+                  ({T.post.updatedOn} {formatDate(updatedDate)})
+                </span>
+              )}
+            </span>
+            <span>{readingTime}</span>
+            <span>{T.post.by} {author}</span>
+          </div>
+        </header>
+
+        <!-- Series nav -->
+        {seriesPosts.length > 1 && (
+          <div style="margin-bottom: 2rem; padding: 1.25rem; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px;">
+            <p style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 0.75rem;">
+              {T.post.series}: {series}
+            </p>
+            <ol style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.375rem;">
+              {seriesPosts.map((p) => (
+                <li>
+                  <a
+                    href={`${basePath}/${getPostSlug(p)}`}
+                    style={`
+                      display: block;
+                      padding: 0.375rem 0.625rem;
+                      border-radius: 6px;
+                      font-size: 0.875rem;
+                      text-decoration: none;
+                      transition: color 0.15s;
+                      color: ${p.id === post.id ? 'var(--accent)' : 'var(--text-muted)'};
+                      background: ${p.id === post.id ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent'};
+                      font-weight: ${p.id === post.id ? '500' : '400'};
+                    `}
+                  >
+                    {p.data.seriesOrder}. {p.data.title}
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+
+        <!-- Post content -->
+        <div class="prose prose-neutral max-w-none">
+          <slot />
+        </div>
+
+        <!-- Tags -->
+        {tags.length > 0 && (
+          <div style="margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
+            <span style="font-size: 0.8rem; color: var(--text-muted); margin-right: 0.25rem;">{T.post.tags}</span>
+            {tags.map((tag) => (
+              <a
+                href={`/tags/${tag.toLowerCase().replace(/\s+/g, '-')}`}
+                style="font-size: 0.8rem; padding: 0.25em 0.75em; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); text-decoration: none; transition: color 0.15s, border-color 0.15s;"
+                onmouseover="this.style.color='var(--accent)'; this.style.borderColor='var(--accent)';"
+                onmouseout="this.style.color='var(--text-muted)'; this.style.borderColor='var(--border)';"
+              >
+                #{tag}
+              </a>
+            ))}
+          </div>
+        )}
+
+        <!-- Newsletter -->
+        <Newsletter />
+      </article>
+
+      <!-- Sidebar TOC -->
+      <aside class="hidden lg:block">
+        <TableOfContents headings={headings} />
+      </aside>
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  // Code copy buttons
+  document.querySelectorAll<HTMLPreElement>('pre').forEach((pre) => {
+    const btn = document.createElement('button');
+    btn.className = 'copy-code-btn';
+    btn.textContent = 'Copy';
+    pre.style.position = 'relative';
+    pre.appendChild(btn);
+
+    btn.addEventListener('click', async () => {
+      const code = pre.querySelector('code')?.textContent ?? '';
+      await navigator.clipboard.writeText(code);
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = 'Copy';
+        btn.classList.remove('copied');
+      }, 2000);
+    });
+  });
+</script>

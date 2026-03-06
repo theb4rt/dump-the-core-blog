@@ -1,0 +1,289 @@
+---
+import type { CollectionEntry } from 'astro:content';
+type AnyPost = CollectionEntry<'blogEn'> | CollectionEntry<'blogEs'>;
+import { formatDate } from '../../utils/date';
+import { getReadingTime } from '../../utils/reading-time';
+import { getPostSlug } from '../../utils/slug';
+import { useTranslations } from '../../i18n';
+
+interface Props {
+  post: AnyPost;
+  featured?: boolean;
+  lang?: 'en' | 'es';
+}
+
+const { post, featured = false, lang } = Astro.props;
+const T = useTranslations(lang ?? post.data.lang ?? 'en');
+const { title, description, pubDate, category, tags, author, coverImage } = post.data;
+const readingTime = getReadingTime(post.body ?? '');
+const basePath = (lang ?? post.data.lang) === 'es' ? '/es/blog' : '/blog';
+const slug = `${basePath}/${getPostSlug(post)}`;
+
+// Category → accent color mapping
+const catColors: Record<string, string> = {
+  linux:     '#22c55e',
+  debugging: '#f97316',
+  meta:      '#7c6af7',
+};
+const catKey = (category ?? '').toLowerCase();
+const catColor = catColors[catKey] ?? '#3b82f6';
+
+// Author initials for avatar
+const initials = (author ?? 'b4rt')
+  .split(/[\s-]/)
+  .map((w) => w[0]?.toUpperCase() ?? '')
+  .slice(0, 2)
+  .join('');
+---
+
+<article class={`post-card ${featured ? 'featured' : ''}`}>
+  <!-- Thumbnail / gradient placeholder -->
+  <div class="card-thumb">
+    {coverImage ? (
+      <img src={coverImage} alt={title} loading="lazy" decoding="async" />
+    ) : (
+      <div
+        class="card-thumb-placeholder"
+        style={`background: linear-gradient(135deg, ${catColor}18, transparent);`}
+      >
+        <span
+          class="thumb-bg-letter"
+          style={`color: ${catColor};`}
+          aria-hidden="true"
+        >{(category ?? 'P')[0]}</span>
+        <div class="card-thumb-accent" style={`background: ${catColor};`}></div>
+      </div>
+    )}
+  </div>
+
+  <div class="card-body">
+    <!-- Category + reading time -->
+    <div class="card-meta-top">
+      {category && (
+        <a
+          href={`/categories/${catKey.replace(/\s+/g, '-')}`}
+          class="cat-badge"
+          style={`color: ${catColor}; background: color-mix(in srgb, ${catColor} 12%, transparent);`}
+          onclick="event.stopPropagation()"
+        >
+          {category}
+        </a>
+      )}
+      <span class="meta-text">{readingTime}</span>
+    </div>
+
+    <!-- Title -->
+    <h2 class={`card-title ${featured ? 'featured-title' : ''}`}>
+      <a href={slug} class="card-title-link">{title}</a>
+    </h2>
+
+    <!-- Description -->
+    <p class="card-desc">{description}</p>
+
+    <!-- Footer: author + date -->
+    <div class="card-footer">
+      <div class="author-row">
+        <div class="avatar" style={`background: ${catColor};`} aria-hidden="true">
+          {initials}
+        </div>
+        <div class="author-info">
+          <span class="author-name">{author}</span>
+          <time class="pub-date" datetime={pubDate.toISOString()}>
+            {formatDate(pubDate)}
+          </time>
+        </div>
+      </div>
+      <a href={slug} class="read-more" aria-label={`${T.post.read} ${title}`}>
+        {T.post.read}
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m9 18 6-6-6-6"/>
+        </svg>
+      </a>
+    </div>
+  </div>
+</article>
+
+<style>
+  .post-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .post-card:hover {
+    border-color: var(--border-strong);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  .card-thumb {
+    height: 160px;
+    overflow: hidden;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .card-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .card-thumb-placeholder {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+  }
+  .card-thumb-accent {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+  }
+  .thumb-bg-letter {
+    position: absolute;
+    right: 1.25rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: var(--font-display);
+    font-size: 7rem;
+    font-weight: 900;
+    line-height: 1;
+    opacity: 0.07;
+    user-select: none;
+  }
+
+  .card-body {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    flex: 1;
+  }
+  .featured .card-body { padding: 1.75rem; }
+
+  .card-meta-top {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    flex-wrap: wrap;
+  }
+
+  .cat-badge {
+    font-family: var(--font-display);
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0.2em 0.6em;
+    border-radius: 3px;
+    text-decoration: none;
+    transition: opacity 0.15s;
+  }
+  .cat-badge:hover { opacity: 0.8; }
+
+  .meta-text {
+    font-size: 0.75rem;
+    color: var(--text-faint);
+  }
+
+  .card-title {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    font-weight: 800;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+  .featured-title { font-size: 1.35rem; }
+
+  .card-title-link {
+    color: var(--text);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .card-title-link:hover { color: var(--accent); }
+
+  .card-desc {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    line-height: 1.65;
+    margin: 0;
+    flex: 1;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 0.875rem;
+    border-top: 1px solid var(--border);
+    margin-top: auto;
+    gap: 0.5rem;
+  }
+
+  .author-row {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+  }
+
+  .avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-size: 0.6rem;
+    font-weight: 800;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  .author-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.05rem;
+  }
+
+  .author-name {
+    font-family: var(--font-display);
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .pub-date {
+    font-size: 0.7rem;
+    color: var(--text-faint);
+  }
+
+  .read-more {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-family: var(--font-display);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    text-decoration: none;
+    flex-shrink: 0;
+    transition: gap 0.15s;
+  }
+  .read-more:hover { gap: 0.4rem; }
+</style>

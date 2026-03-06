@@ -1,0 +1,467 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PostCard from '../components/blog/PostCard.astro';
+import Newsletter from '../components/ui/Newsletter.astro';
+import { formatDate } from '../utils/date';
+import { getReadingTime } from '../utils/reading-time';
+import { getPostSlug } from '../utils/slug';
+import { useTranslations } from '../i18n';
+const T = useTranslations('en');
+
+const allPosts = await getCollection('blogEn', (p) => !p.data.draft);
+const sorted = allPosts.sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+const [hero, ...rest] = sorted.filter((p) => p.data.featured).concat(sorted);
+const uniqueRest = rest.filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i && p.id !== hero?.id).slice(0, 6);
+
+const heroCategory = (hero?.data.category ?? '').toLowerCase();
+const heroCatColors: Record<string, string> = { linux: '#22c55e', debugging: '#f97316', meta: '#7c6af7' };
+const heroColor = heroCatColors[heroCategory] ?? '#3b82f6';
+---
+
+<BaseLayout
+  title="dumpthecore.com"
+  description={T.home.siteDescription}
+>
+  <div class="home-wrap">
+
+    {/* ── Hero: big featured post ── */}
+    {hero && (
+      <section class="hero-section animate-fade-up">
+        <div class="hero-inner">
+          <!-- Left: text -->
+          <div class="hero-content">
+            <a
+              href={`/categories/${heroCategory.replace(/\s+/g, '-')}`}
+              class="hero-cat"
+              style={`color: ${heroColor}; background: color-mix(in srgb, ${heroColor} 12%, transparent);`}
+            >
+              {hero.data.category}
+            </a>
+
+            <h1 class="hero-title">
+              <a href={`/blog/${getPostSlug(hero)}`} class="hero-title-link">
+                {hero.data.title}
+              </a>
+            </h1>
+
+            <p class="hero-desc">{hero.data.description}</p>
+
+            <div class="hero-meta">
+              <div class="hero-avatar" style={`background: ${heroColor};`} aria-hidden="true">
+                {(hero.data.author ?? 'b4rt')[0].toUpperCase()}
+              </div>
+              <span class="hero-author">{hero.data.author}</span>
+              <span class="hero-sep">·</span>
+              <time datetime={hero.data.pubDate.toISOString()}>
+                {formatDate(hero.data.pubDate)}
+              </time>
+              <span class="hero-sep">·</span>
+              <span>{getReadingTime(hero.body ?? '')}</span>
+            </div>
+
+            <a href={`/blog/${getPostSlug(hero)}`} class="hero-btn">
+              {T.home.readArticle}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m9 18 6-6-6-6"/>
+              </svg>
+            </a>
+          </div>
+
+          <!-- Right: decorative terminal -->
+          <div class="hero-visual" aria-hidden="true">
+            <div class="code-window">
+              <div class="code-titlebar">
+                <div class="wez-tab active">
+                  <span class="wez-tab-title">~</span>
+                  <span class="wez-tab-close">×</span>
+                </div>
+                <div class="wez-tab">
+                  <span class="wez-tab-title">~/blog</span>
+                  <span class="wez-tab-close">×</span>
+                </div>
+                <span class="wez-new-tab">+</span>
+                <div class="wez-win-btns">
+                  <span class="wez-win-btn">−</span>
+                  <span class="wez-win-btn">□</span>
+                  <span class="wez-win-btn wez-win-close">×</span>
+                </div>
+              </div>
+              <pre class="code-content"><code
+><span class="zsh-prompt"><span class="p-user">b4rt</span><span class="p-at">@</span><span class="p-host">arch</span> <span class="p-dir">~</span> <span class="p-sym">❯</span></span> <span style="color:#e0e0e0">uname -a</span>
+<span style="color:#888">Linux arch 6.12.0 #1 SMP PREEMPT_DYNAMIC x86_64 GNU/Linux</span>
+
+<span class="zsh-prompt"><span class="p-user">b4rt</span><span class="p-at">@</span><span class="p-host">arch</span> <span class="p-dir">~/blog</span> <span class="p-sym">❯</span></span> <span style="color:#e0e0e0">cat about.txt</span>
+<span style={`color:${heroColor}`}>  systems • linux • debugging</span>
+<span style="color:#e0e0e0">  things that break at 3am</span>
+
+<span class="zsh-prompt"><span class="p-user">b4rt</span><span class="p-at">@</span><span class="p-host">arch</span> <span class="p-dir">~/blog</span> <span class="p-sym">❯</span></span> <span style="color:#e0e0e0">ls posts/</span>
+<span style={`color:${heroColor}`}>grep</span><span style="color:#888">/  </span><span style={`color:${heroColor}`}>nmap</span><span style="color:#888">/  </span><span style={`color:${heroColor}`}>perf</span><span style="color:#888">/  </span><span style={`color:${heroColor}`}>aws</span><span style="color:#888">/  </span><span style={`color:${heroColor}`}>find</span><span style="color:#888">/</span>
+
+<span class="zsh-prompt"><span class="p-user">b4rt</span><span class="p-at">@</span><span class="p-host">arch</span> <span class="p-dir">~/blog</span> <span class="p-sym">❯</span></span> <span class="cursor">█</span></code></pre>
+            </div>
+          </div>
+        </div>
+      </section>
+    )}
+
+    {/* ── Divider ── */}
+    <div class="section-divider">
+      <div class="divider-line"></div>
+      <span class="divider-label">{T.home.latestPosts}</span>
+      <div class="divider-line"></div>
+    </div>
+
+    {/* ── Post grid ── */}
+    <section class="posts-section animate-fade-up" style="animation-delay:0.1s">
+      <div class="posts-grid">
+        {uniqueRest.map((post) => (
+          <PostCard post={post} />
+        ))}
+      </div>
+
+      <div class="view-all-wrap">
+        <a href="/blog" class="view-all-btn">
+          {T.home.viewAll}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m9 18 6-6-6-6"/>
+          </svg>
+        </a>
+      </div>
+    </section>
+
+    {/* ── Newsletter ── */}
+    <div class="newsletter-wrap animate-fade-up" style="animation-delay:0.2s">
+      <Newsletter />
+    </div>
+
+  </div>
+</BaseLayout>
+
+<style>
+  .home-wrap {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1.5rem 5rem;
+  }
+
+  /* ─── Hero ─────────────────────── */
+  .hero-section {
+    padding: 3.5rem 0 3rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 3rem;
+  }
+
+  @media (max-width: 639px) {
+    .hero-section { padding: 2rem 0 2rem; margin-bottom: 2rem; }
+    .home-wrap { padding: 0 1rem 3rem; }
+  }
+
+  .hero-inner {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+    align-items: center;
+  }
+  @media (min-width: 900px) {
+    .hero-inner { grid-template-columns: 1fr 1fr; gap: 4rem; }
+  }
+
+  .hero-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .hero-cat {
+    display: inline-block;
+    font-family: var(--font-display);
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 0.3em 0.75em;
+    border-radius: 3px;
+    text-decoration: none;
+    width: fit-content;
+    transition: opacity 0.15s;
+  }
+  .hero-cat:hover { opacity: 0.8; }
+
+  .hero-title {
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 4.5vw, 3.25rem);
+    font-weight: 900;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    margin: 0;
+  }
+
+  .hero-title-link {
+    color: var(--text);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .hero-title-link:hover { color: var(--accent); }
+
+  .hero-desc {
+    font-size: 1rem;
+    color: var(--text-muted);
+    line-height: 1.7;
+    margin: 0;
+    max-width: 480px;
+  }
+
+  .hero-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    flex-wrap: wrap;
+  }
+
+  .hero-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-size: 0.62rem;
+    font-weight: 800;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  .hero-author {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text);
+  }
+
+  .hero-sep { color: var(--text-faint); }
+
+  .hero-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.7rem 1.5rem;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 5px;
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-decoration: none;
+    width: fit-content;
+    transition: background 0.15s, gap 0.15s;
+  }
+  .hero-btn:hover {
+    background: var(--accent-hover);
+    gap: 0.55rem;
+  }
+
+  /* Code window decoration */
+  .hero-visual { display: block; }
+  @media (max-width: 899px) {
+    .hero-visual {
+      order: -1;
+    }
+  }
+
+  .code-window {
+    background: #0d0e11;
+    border: 1px solid #2a2b30;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+
+  .code-titlebar {
+    display: flex;
+    align-items: stretch;
+    background: #1c1b19;
+    border-bottom: 1px solid #2a2b30;
+    min-height: 32px;
+    overflow: hidden;
+  }
+
+  .wez-tab {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0 0.875rem;
+    background: #1c1b19;
+    border-right: 1px solid #2a2b30;
+    position: relative;
+    cursor: default;
+  }
+  .wez-tab.active {
+    background: #0d0e11;
+  }
+  .wez-tab.active::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: #7c6af7;
+  }
+
+  .wez-tab-title {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: #aaa;
+    white-space: nowrap;
+  }
+  .wez-tab.active .wez-tab-title { color: #e0e0e0; }
+
+  .wez-tab-close {
+    font-size: 0.75rem;
+    color: #555;
+    line-height: 1;
+    padding: 0 0.1rem;
+  }
+  .wez-tab.active .wez-tab-close { color: #888; }
+
+  .wez-new-tab {
+    display: flex;
+    align-items: center;
+    padding: 0 0.75rem;
+    font-size: 1rem;
+    color: #555;
+    cursor: default;
+    line-height: 1;
+  }
+
+  .wez-win-btns {
+    display: flex;
+    align-items: stretch;
+    margin-left: auto;
+    border-left: 1px solid #2a2b30;
+  }
+
+  .wez-win-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    font-size: 0.8rem;
+    color: #555;
+    cursor: default;
+    border-right: 1px solid #2a2b30;
+    transition: background 0.1s, color 0.1s;
+  }
+  .wez-win-btn:hover { background: #2a2b30; color: #aaa; }
+  .wez-win-close:hover { background: #c0392b; color: #fff; }
+
+  .code-content {
+    padding: 1.25rem 1.5rem 1.5rem;
+    margin: 0;
+    background: transparent;
+    overflow-x: auto;
+  }
+
+  .code-content code {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    line-height: 1.9;
+    display: block;
+    white-space: pre;
+  }
+
+  @media (max-width: 899px) {
+    .code-content { padding: 1rem 1.25rem 1.25rem; }
+    .code-content code { font-size: 0.72rem; line-height: 1.75; }
+  }
+
+  .zsh-prompt { display: inline; }
+  .p-user  { color: #7ec8a4; font-weight: 600; }
+  .p-at    { color: #888; }
+  .p-host  { color: #7ec8a4; font-weight: 600; }
+  .p-dir   { color: #7c9fcc; font-weight: 500; }
+  .p-sym   { color: #7c6af7; font-weight: 700; }
+
+  .cursor {
+    display: inline-block;
+    color: #7c6af7;
+    animation: blink 1.1s step-end infinite;
+  }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+
+  /* ─── Divider ──────────────────── */
+  .section-divider {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .divider-line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .divider-label {
+    font-family: var(--font-display);
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-faint);
+    white-space: nowrap;
+  }
+
+  /* ─── Posts grid ───────────────── */
+  .posts-section { margin-bottom: 3rem; }
+
+  .posts-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  @media (min-width: 640px) {
+    .posts-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (min-width: 1024px) {
+    .posts-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  .view-all-wrap {
+    margin-top: 2.5rem;
+    text-align: center;
+  }
+
+  .view-all-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.625rem 1.75rem;
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.15s, border-color 0.15s, gap 0.15s;
+  }
+  .view-all-btn:hover {
+    color: var(--text);
+    border-color: var(--accent);
+    gap: 0.55rem;
+  }
+
+  .newsletter-wrap { margin-top: 1rem; }
+</style>

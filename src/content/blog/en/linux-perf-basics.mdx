@@ -1,0 +1,108 @@
+---
+title: "Linux perf in 5 minutes"
+description: "A crash course on using perf to profile CPU usage in Linux applications."
+pubDate: 2026-02-03
+category: "Linux"
+tags: ["linux", "performance", "profiling", "perf"]
+featured: true
+author: "b4rt"
+slug: "linux-perf-basics"
+lang: "en"
+translationKey: "linux-perf-basics"
+series: "Linux Internals"
+seriesOrder: 1
+draft: true
+---
+
+import Callout from '../../../components/ui/Callout.astro';
+
+`perf` is the Swiss army knife of Linux performance analysis. It's already on your machine, it requires no instrumentation, and it can tell you exactly where your CPU cycles are going.
+
+## What perf actually does
+
+`perf` reads hardware performance counters — CPU registers that count events like instructions retired, cache misses, branch mispredictions. It can also do sampling: interrupting the CPU at a fixed rate and recording the current instruction pointer.
+
+<Callout type="tip">
+  You need `CAP_PERFMON` (or root) for most perf operations. On modern kernels, you can also set `kernel.perf_event_paranoid = 1` in sysctl for user-space profiling without root.
+</Callout>
+
+## Basic CPU profiling
+
+Profile a running process for 10 seconds:
+
+```bash
+perf record -g -p <PID> -- sleep 10
+perf report
+```
+
+Or launch a process under perf:
+
+```bash
+perf record -g -- ./my-binary --args
+perf report
+```
+
+The `-g` flag enables call-graph recording. Without it you'll see leaf functions but not who called them — almost useless.
+
+## Reading the report
+
+`perf report` opens an interactive TUI. The columns are:
+
+| Column | Meaning |
+|--------|---------|
+| Overhead | % of samples in this function |
+| Command | Process name |
+| Shared Object | Library or binary |
+| Symbol | Function name |
+
+Press `Enter` on a function to see annotated source/assembly. Press `e` to expand call chains.
+
+## Flame graphs
+
+The TUI is fine, but flame graphs are better:
+
+```bash
+perf record -g -F 999 -- ./my-binary
+perf script > out.perf
+# Install FlameGraph: https://github.com/brendangregg/FlameGraph
+stackcollapse-perf.pl out.perf | flamegraph.pl > flame.svg
+```
+
+Open `flame.svg` in a browser. Wide boxes = hot paths. Find the widest box that's actually your code (not libc) and start there.
+
+## Counting events
+
+Sometimes you don't want samples, you want exact counts:
+
+```bash
+perf stat ./my-binary
+```
+
+Output:
+
+```
+ Performance counter stats for './my-binary':
+
+        1,234.56 msec task-clock                #    0.998 CPUs utilized
+               4      context-switches          #    3.241 /sec
+               0      cpu-migrations            #    0.000 /sec
+           1,089      page-faults               #  882.135 /sec
+   3,456,789,012      cycles                    #    2.800 GHz
+   4,567,890,123      instructions              #    1.32  insn per cycle
+     234,567,890      branches                  #  190.023 M/sec
+       2,345,678      branch-misses             #    1.00% of all branches
+```
+
+`insn per cycle` below 1.0 usually means memory-bound. Branch miss rate above 5% is worth investigating.
+
+<Callout type="warning">
+  Profiling adds overhead. For latency-sensitive measurements, use `perf stat` (which has near-zero overhead) rather than `perf record` (sampling-based).
+</Callout>
+
+## Next steps
+
+- `perf top` — live view of hottest functions, like `top` but for CPU cycles
+- `perf trace` — lightweight strace alternative using eBPF
+- `perf mem` — memory access profiling (NUMA, cache hierarchy)
+
+That's enough to get you started. Go find where your cycles are going.

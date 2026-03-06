@@ -1,0 +1,60 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { getTagCounts } from '../../../utils/taxonomy';
+import { useTranslations } from '../../../i18n';
+
+const T = useTranslations('es');
+const posts = await getCollection('blogEs', (p) => !p.data.draft);
+const counts = getTagCounts(posts);
+const tags = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+
+const maxCount = Math.max(...tags.map(([, c]) => c), 1);
+
+function fontSize(count: number): string {
+  const min = 0.8;
+  const max = 1.6;
+  const size = min + ((count / maxCount) * (max - min));
+  return `${size.toFixed(2)}rem`;
+}
+---
+
+<BaseLayout
+  title={`${T.tags.title} — dumpthecore`}
+  description={T.tags.description}
+  lang="es"
+>
+  <div style="max-width: 800px; margin: 0 auto; padding: 3rem 1rem 5rem;">
+    <h1 style="font-family: var(--font-display); font-size: clamp(2rem, 5vw, 3rem); font-weight: 600; letter-spacing: -0.03em; color: var(--text); margin-bottom: 2.5rem;">
+      {T.tags.title}
+    </h1>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center;">
+      {tags.map(([tag, count]) => {
+        const slug = tag.toLowerCase().replace(/\s+/g, '-');
+        return (
+          <a
+            href={`/es/tags/${slug}`}
+            style={`
+              font-size: ${fontSize(count)};
+              padding: 0.35em 0.75em;
+              background: var(--bg-elevated);
+              border: 1px solid var(--border);
+              border-radius: 999px;
+              color: var(--text-muted);
+              text-decoration: none;
+              transition: color 0.15s, border-color 0.15s;
+              font-family: var(--font-mono);
+            `}
+            title={`${T.common.posts(count)}`}
+            onmouseover="this.style.color='var(--accent)'; this.style.borderColor='var(--accent)';"
+            onmouseout="this.style.color='var(--text-muted)'; this.style.borderColor='var(--border)';"
+          >
+            #{tag}
+            <sup style="font-size: 0.6em; margin-left: 0.25em; opacity: 0.7;">{count}</sup>
+          </a>
+        );
+      })}
+    </div>
+  </div>
+</BaseLayout>

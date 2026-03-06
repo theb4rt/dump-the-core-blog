@@ -1,0 +1,44 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { getCategoryCounts } from '../../../utils/taxonomy';
+import { useTranslations } from '../../../i18n';
+
+const T = useTranslations('es');
+const posts = await getCollection('blogEs', (p) => !p.data.draft);
+const counts = getCategoryCounts(posts);
+const categories = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+---
+
+<BaseLayout
+  title={`${T.categories.title} — dumpthecore`}
+  description="Explora los posts por categoría en dumpthecore."
+  lang="es"
+>
+  <div style="max-width: 800px; margin: 0 auto; padding: 3rem 1rem 5rem;">
+    <h1 style="font-family: var(--font-display); font-size: clamp(2rem, 5vw, 3rem); font-weight: 600; letter-spacing: -0.03em; color: var(--text); margin-bottom: 2.5rem;">
+      {T.categories.title}
+    </h1>
+
+    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+      {categories.map(([cat, count]) => {
+        const slug = cat.toLowerCase().replace(/\s+/g, '-');
+        return (
+          <a
+            href={`/es/categories/${slug}`}
+            style="display: flex; align-items: center; justify-content: space-between; padding: 1.25rem 1.5rem; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px; text-decoration: none; transition: border-color 0.15s;"
+            onmouseover="this.style.borderColor='var(--accent)'"
+            onmouseout="this.style.borderColor='var(--border)'"
+          >
+            <span style="font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; color: var(--text);">
+              {cat}
+            </span>
+            <span style="font-size: 0.875rem; color: var(--text-muted); font-family: var(--font-mono);">
+              {T.common.posts(count)}
+            </span>
+          </a>
+        );
+      })}
+    </div>
+  </div>
+</BaseLayout>

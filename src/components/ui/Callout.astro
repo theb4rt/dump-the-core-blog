@@ -1,0 +1,57 @@
+---
+type CalloutType = 'tip' | 'info' | 'warning' | 'danger';
+
+interface Props {
+  type?: CalloutType;
+  title?: string;
+}
+
+const { type = 'info', title } = Astro.props;
+
+const config: Record<CalloutType, { label: string; color: string; bg: string; icon: string }> = {
+  tip: {
+    label: 'Tip',
+    color: '#4ade80',
+    bg: 'rgba(74, 222, 128, 0.08)',
+    icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>`,
+  },
+  info: {
+    label: 'Info',
+    color: '#60a5fa',
+    bg: 'rgba(96, 165, 250, 0.08)',
+    icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>`,
+  },
+  warning: {
+    label: 'Warning',
+    color: '#fbbf24',
+    bg: 'rgba(251, 191, 36, 0.08)',
+    icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/></svg>`,
+  },
+  danger: {
+    label: 'Danger',
+    color: '#f87171',
+    bg: 'rgba(248, 113, 113, 0.08)',
+    icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg>`,
+  },
+};
+
+const c = config[type];
+---
+
+<aside
+  style={`
+    margin: 1.5rem 0;
+    padding: 1rem 1.25rem;
+    border-left: 3px solid ${c.color};
+    border-radius: 0 8px 8px 0;
+    background: ${c.bg};
+  `}
+>
+  <div style={`display: flex; align-items: center; gap: 0.5rem; color: ${c.color}; font-weight: 600; font-size: 0.875rem; margin-bottom: 0.5rem;`}>
+    <span set:html={c.icon} />
+    {title ?? c.label}
+  </div>
+  <div style="color: var(--text); font-size: 0.9rem; line-height: 1.6;">
+    <slot />
+  </div>
+</aside>

@@ -1,0 +1,17 @@
+---
+interface Props {
+  tag: string;
+  count?: number;
+}
+const { tag, count } = Astro.props;
+const slug = tag.toLowerCase().replace(/\s+/g, '-');
+---
+
+<a
+  href={`/tags/${slug}`}
+  style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.775rem; padding: 0.2em 0.65em; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); text-decoration: none; transition: color 0.15s, border-color 0.15s;"
+  onmouseover="this.style.color='var(--accent)'; this.style.borderColor='var(--accent)';"
+  onmouseout="this.style.color='var(--text-muted)'; this.style.borderColor='var(--border)';"
+>
+  #{tag}{count !== undefined && <span style="opacity: 0.6; font-size: 0.7rem;">({count})</span>}
+</a>

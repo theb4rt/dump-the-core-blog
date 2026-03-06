@@ -1,0 +1,148 @@
+---
+title: "Escaneando con Nmap: obteniendo información"
+slug: "nmap-part-2"
+description: "Estrategia práctica de escaneo con Nmap: fingerprinting de servicios, OS detection, timing y flags avanzados."
+pubDate: 2019-05-30
+category: "Security"
+tags: ["nmap", "hacking", "seguridad", "puertos", "tcp", "pentest", "linux", "fingerprint"]
+featured: false
+author: "b4rt"
+lang: "es"
+translationKey: "nmap-part-2"
+series: "Nmap"
+seriesOrder: 2
+coverImage: "/images/posts/nmap-2.jpg"
+---
+
+import Callout from '../../../components/ui/Callout.astro';
+
+## Obteniendo información con Nmap
+
+La secuencia de comandos que vamos a utilizar es más una recomendación que un estándar. La estrategia es la siguiente:
+
+1. Hacer un escaneo por defecto, que utilizará el **top 1000 de los puertos de Nmap**.
+2. Hacer el escaneo de los **65535 puertos**.
+3. Una vez tengamos mapeados los puertos abiertos, listarlos y utilizar otros argumentos como `-sV`, `-O`, `-sC`.
+4. Con las versiones, el sistema operativo y las características de cada puerto y servicio, utilizar los **scripts de Nmap**.
+
+---
+
+## Paso 1 — Escaneo por defecto
+
+El primer paso es realizar un escaneo por defecto de la lista de los puertos más frecuentes de Nmap:
+
+```bash
+nmap -Pn 192.168.1.28 -vv --reason
+```
+
+Flags utilizados:
+
+| Flag | Descripción |
+|---|---|
+| `-Pn` | Cuando sabemos que el host está activo, para que Nmap no vuelva a comprobar eso |
+| `-vv` | Nivel de verbosidad 2 en la salida del comando |
+| `--reason` | Muestra información sobre por qué el puerto se encuentra en ese estado |
+
+<Callout type="tip">
+  Los flags `-vv` y `--reason` nos ayudarán cuando cierto tipo de escaneo resulte diferente y tengamos que obtener más información sobre el estado de los puertos.
+</Callout>
+
+En el resultado del escaneo rápido podemos observar:
+- El escaneo `-sS` fue el utilizado (no se completó el saludo de 3 vías).
+- Con `--reason` vemos la justificación del estado de cada puerto.
+- Se detectaron 3 puertos abiertos y uno filtrado.
+
+---
+
+## Paso 2 — Escaneo completo de los 65535 puertos
+
+El siguiente paso es realizar el escaneo a **todos** los puertos:
+
+```bash
+nmap 192.168.1.28 -T4 -p 1-65535 -vv --reason
+```
+
+Flags adicionales:
+
+| Flag | Descripción |
+|---|---|
+| `-T4` | Control de timing. Por defecto se usa T3. Mayor número = más agresivo y menos preciso |
+| `-p 1-65535` | Rango de puertos a escanear |
+| `--open` | Muestra solo los puertos abiertos, útil para reducir tiempo en escaneos grandes |
+
+En el resultado podemos ver que, a parte de los 3 puertos anteriores, se detectó uno nuevo (48500), abierto pero sin nombre de servicio identificado.
+
+<Callout type="info">
+  Si el resultado de los 65535 nos hubiera tomado varias horas, habríamos aprovechado el escaneo inicial para analizar información mientras el segundo escaneo se ejecutaba. Por eso la estrategia en dos pasos tiene mucho sentido.
+</Callout>
+
+---
+
+## Paso 3 — Fingerprinting de servicios y OS detection
+
+Una vez identificados los puertos abiertos, los analizamos con `-sV` y `-O` para obtener versiones y sistema operativo:
+
+```bash
+nmap 192.168.1.28 -p 21,22,80,48500 -sV -O -vv --reason
+```
+
+Flags:
+
+| Flag | Descripción |
+|---|---|
+| `-p` | Puertos separados por comas |
+| `-sV` | Nmap hace fingerprint a los puertos para obtener versiones y nombres de servicios |
+| `-O` | Intenta identificar el sistema operativo y la versión |
+
+Observaciones del resultado:
+- El fingerprint identificó que en el puerto 48500 corría **PostgreSQL**.
+- Se identificó que era un sistema **Linux**.
+- El servicio **OpenSSH** ayudó a determinar que era concretamente un **Debian**.
+
+<Callout type="warning">
+  La detección de SO con `-O` no es muy exacta. En muchos casos es preferible inferirlo analizando el banner de algún servicio como SSH, que suele incluir la distribución y versión.
+</Callout>
+
+---
+
+## Control de timing avanzado
+
+Debemos tener en cuenta el **tiempo** al realizar el escaneo y combinar los parámetros correctamente. Dos flags muy útiles:
+
+| Flag | Descripción |
+|---|---|
+| `--host-timeout` | Tiempo máximo que le daremos a Nmap para obtener información del host. Menor tiempo = escaneo menos exacto |
+| `--max-retries` | Cuántas veces Nmap preguntará por un puerto determinado |
+
+Algunos ejemplos:
+
+```bash
+# Escaneo con timeout de 60 minutos y 10 reintentos
+nmap 192.168.1.28 --host-timeout 60m --max-retries 10 -vv --reason
+
+# Escaneo completo de puertos con 2 horas de timeout
+nmap 192.168.1.28 -p 1-65535 --host-timeout 120m --max-retries 5 -vvv --reason
+```
+
+---
+
+## Templates de timing de Nmap
+
+Utilizar bien los tiempos es vital, pues por apresurarnos Nmap podría no trabajar correctamente. Además, no siempre queremos usar `-T5` — es un escaneo fácilmente detectable y, al ser muy rápido, tiende a fallar si la red no es la adecuada. El autor de Nmap recomienda usar **-T4**.
+
+| Template | Nombre | Descripción |
+|---|---|---|
+| `-T0` | Paranoid | Muy lento, diseñado para evadir IDS |
+| `-T1` | Sneaky | Lento, para evadir detección |
+| `-T2` | Polite | Más lento que el normal para reducir carga en la red |
+| `-T3` | Normal | Comportamiento por defecto |
+| `-T4` | Aggressive | Más rápido, asume una red rápida y fiable |
+| `-T5` | Insane | Extremadamente rápido, puede perder información |
+
+<Callout type="tip">
+  Para evadir IDS o IPS, es preferible usar `-T1` o `-T0`. Para entornos de laboratorio o auditorías en redes propias, `-T4` es el punto óptimo entre velocidad y precisión.
+</Callout>
+
+---
+
+En el siguiente post veremos cómo utilizar los **Scripts de Nmap** (NSE) para realizar análisis más avanzados, pues como explicaba al inicio, Nmap no solo sirve para obtener información…

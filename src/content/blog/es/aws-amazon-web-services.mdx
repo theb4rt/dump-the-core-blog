@@ -1,0 +1,296 @@
+---
+title: "AWS: Arquitectura simple y segura"
+slug: "aws-vpc-architecture"
+description: "Cómo desplegar una VPC segura en AWS con EC2, Bastion Host, NAT Gateway y ELB desde cero."
+pubDate: 2020-03-29
+updatedDate: 2020-03-29
+category: "Cloud"
+tags: ["aws", "vpc", "ec2", "networking", "linux", "servidores"]
+featured: false
+author: "b4rt"
+lang: "es"
+translationKey: "aws-vpc-architecture"
+coverImage: "/images/posts/aws.jpg"
+---
+
+import Callout from '../../../components/ui/Callout.astro';
+
+## Desarrollo de una arquitectura simple y segura con AWS
+
+Para desarrollar este ejemplo debes tener un conocimiento básico de AWS, TCP/IP y Linux.
+
+La arquitectura que vamos a desplegar incluye los siguientes componentes en la región **US-East (Virginia)**:
+
+- 1 Virtual Private Cloud (VPC)
+- 3 Availability Zones (A, B, C)
+- 2 subnets privadas + 1 subnet pública
+- 3 instancias EC2
+- 1 bucket S3
+- 1 Elastic Load Balancer (ELB)
+- Route 53
+
+![Diagrama de arquitectura AWS](https://elblogdebart.com/wp-content/uploads/2020/03/aws_reporte.jpg)
+
+---
+
+## Creando la VPC
+
+Una **VPC** (Virtual Private Cloud) es una red privada virtual. Esta red es una sección aislada dentro de la nube de AWS donde puedes lanzar recursos de forma controlada.
+
+Para crearla, accedemos a la consola de AWS → **VPC** → *Your VPCs* → *Create VPC*.
+
+Configuramos:
+- **Name tag**: el nombre que identifica nuestra VPC
+- **IPv4 CIDR block**: el rango de IPs, por ejemplo `10.0.0.0/16`
+
+<Callout type="info">
+  Un bloque `/16` nos da 65.536 direcciones IP disponibles dentro de nuestra red privada.
+</Callout>
+
+---
+
+## Configurando las Subnets Públicas y Privadas
+
+Una vez creada la VPC, necesitamos definir las **subnets** dentro de ella. Las subnets nos permiten segmentar la red en zonas más pequeñas distribuidas por Availability Zones.
+
+- **Subnet pública**: tiene acceso a internet. Aquí colocaremos el Bastion Host y el NAT Gateway.
+- **Subnets privadas**: no tienen acceso directo a internet. Aquí vivirán nuestros servidores web, protegidos del exterior.
+
+Para crear cada subnet: **VPC** → *Subnets* → *Create Subnet*.
+
+Configuramos:
+- **VPC**: seleccionamos la VPC creada anteriormente
+- **Availability Zone**: distribuimos las subnets entre zonas A, B y C
+- **IPv4 CIDR block**: asignamos rangos no solapados, por ejemplo:
+  - Pública: `10.0.1.0/24`
+  - Privada A: `10.0.2.0/24`
+  - Privada B: `10.0.3.0/24`
+
+<Callout type="tip">
+  Habilita **Auto-assign public IPv4** en la subnet pública para que las instancias lanzadas en ella reciban automáticamente una IP pública.
+</Callout>
+
+---
+
+## Tablas de Enrutamiento (parte 1)
+
+Las **Route Tables** definen a dónde se envía el tráfico de red desde cada subnet. Por defecto, AWS crea una route table principal que permite comunicación entre subnets dentro de la misma VPC.
+
+Para crear una route table específica para nuestras subnets privadas: **VPC** → *Route Tables* → *Create Route Table*.
+
+Por ahora solo asociamos las subnets privadas a esta tabla. El tráfico entre subnets dentro de la VPC funciona sin configuración adicional gracias a la ruta `local` que AWS añade automáticamente.
+
+---
+
+## Internet Gateway y NAT Gateway
+
+Para que nuestras instancias puedan comunicarse con el exterior, necesitamos dos componentes clave:
+
+| Componente | Propósito |
+|---|---|
+| **Internet Gateway** | Permite tráfico bidireccional entre la subnet pública e internet |
+| **NAT Gateway** | Permite a las subnets privadas iniciar conexiones hacia internet (sin exponer las instancias) |
+
+---
+
+## Configurando el Internet Gateway
+
+Un **Internet Gateway** es el punto de entrada y salida de internet para nuestra VPC.
+
+Pasos: **VPC** → *Internet Gateways* → *Create Internet Gateway* → asignarle un nombre → *Attach to VPC*.
+
+Una vez creado, lo asociamos a nuestra VPC. Solo puede haber un Internet Gateway por VPC.
+
+---
+
+## Tablas de Enrutamiento (parte 2)
+
+Con el Internet Gateway listo, actualizamos la **route table de la subnet pública** para enviar el tráfico de internet a través de él.
+
+En la route table de la subnet pública añadimos:
+
+| Destination | Target |
+|---|---|
+| `0.0.0.0/0` | `igw-xxxxxxxxx` (nuestro Internet Gateway) |
+
+Esto significa: "todo el tráfico que no sea local, envíalo al Internet Gateway".
+
+Para las subnets privadas, la ruta por defecto apuntará al **NAT Gateway** una vez que lo creemos.
+
+---
+
+## Configurando el NAT Gateway
+
+El **NAT Gateway** permite que las instancias en subnets privadas descarguen paquetes de internet (actualizaciones del sistema, dependencias, etc.) sin estar expuestas directamente.
+
+<Callout type="warning">
+  El NAT Gateway debe desplegarse en la **subnet pública**, no en las privadas. Requiere una **Elastic IP** asignada.
+</Callout>
+
+Pasos: **VPC** → *NAT Gateways* → *Create NAT Gateway*.
+
+- **Subnet**: seleccionamos la subnet pública
+- **Elastic IP**: asignamos o creamos una nueva
+
+Una vez creado, actualizamos la route table de las subnets privadas:
+
+| Destination | Target |
+|---|---|
+| `0.0.0.0/0` | `nat-xxxxxxxxx` (nuestro NAT Gateway) |
+
+---
+
+## Instancias EC2
+
+Las **instancias EC2** son los servidores virtuales de AWS. Admiten Linux y Windows con diferentes combinaciones de CPU, RAM y almacenamiento según el tipo de instancia elegido.
+
+Para este ejemplo lanzaremos:
+- 1 instancia como **Bastion Host** (en la subnet pública)
+- 2 instancias como **servidores web** (en las subnets privadas, una por AZ)
+
+---
+
+## Bastion Host
+
+El **Bastion Host** es un concepto fundamental para configurar una red segura. La idea es la siguiente: nuestros servidores web están en subnets privadas y no son accesibles desde internet directamente. El Bastion Host actúa como puerta de entrada controlada.
+
+Solo el Bastion Host está expuesto a internet (por el puerto 22/SSH), y desde él saltamos a los servidores internos. Esto reduce la superficie de ataque drásticamente.
+
+<Callout type="danger">
+  El Bastion Host debe estar bien securizado: acceso SSH solo por clave (sin password), fail2ban activo, y si es posible, restringir el acceso SSH solo a tu IP de origen.
+</Callout>
+
+### Instancia EC2 (Bastion Host)
+
+Lanzamos la instancia en **EC2** → *Launch Instance*:
+
+- **AMI**: Amazon Linux 2 (o Ubuntu)
+- **Instance type**: `t2.micro` (free tier)
+- **Network**: nuestra VPC
+- **Subnet**: subnet **pública**
+- **Auto-assign Public IP**: habilitado
+- **Security Group**: puerto `22` abierto (idealmente solo desde tu IP)
+- **Key pair**: creamos o seleccionamos un par de claves SSH
+
+### Instancia EC2 (Servidor WEB)
+
+Repetimos el proceso para los servidores web, con estas diferencias:
+
+- **Subnet**: subnet **privada** (una instancia en cada AZ)
+- **Auto-assign Public IP**: deshabilitado
+- **Security Group**: puerto `80` abierto desde el Security Group del ELB, y puerto `22` abierto solo desde el Security Group del Bastion Host
+
+Instalamos un servidor web simple:
+
+```bash
+# En Amazon Linux 2
+sudo yum update -y
+sudo yum install -y httpd
+sudo systemctl start httpd
+sudo systemctl enable httpd
+
+# Página de prueba con identificador del servidor
+echo "<h1>Servidor Web - $(hostname)</h1>" | sudo tee /var/www/html/index.html
+```
+
+### Conexión SSH a nuestro Servidor Web, utilizando el Bastion Host
+
+Sin SSH Agent Forwarding necesitaríamos copiar nuestra clave privada al Bastion Host para saltar a los servidores internos — una mala práctica de seguridad.
+
+#### SSH Agent Forwarding
+
+El **SSH Agent Forwarding** permite usar nuestra clave privada local como intermediario, sin necesidad de almacenarla en el Bastion Host.
+
+```bash
+# Añadir la clave al agente SSH local
+ssh-add ~/.ssh/mi-clave.pem
+
+# Conectar al Bastion Host con agent forwarding habilitado (-A)
+ssh -A ec2-user@<IP-PUBLICA-BASTION>
+
+# Desde el Bastion, saltar al servidor privado (usa la clave del agente local)
+ssh ec2-user@<IP-PRIVADA-SERVIDOR-WEB>
+```
+
+<Callout type="tip">
+  También puedes configurar esto en `~/.ssh/config` para evitar escribir `-A` cada vez:
+
+  ```
+  Host bastion
+    HostName <IP-PUBLICA-BASTION>
+    User ec2-user
+    IdentityFile ~/.ssh/mi-clave.pem
+    ForwardAgent yes
+  ```
+</Callout>
+
+### Creando la AMI
+
+Una vez configurado el servidor web, creamos una **AMI** (Amazon Machine Image) para poder lanzar nuevas instancias idénticas fácilmente — útil para el Auto Scaling del ELB.
+
+**EC2** → seleccionar la instancia → *Actions* → *Image and templates* → *Create image*.
+
+---
+
+## Elastic Load Balancer (ELB)
+
+El **Elastic Load Balancer** distribuye el tráfico entrante entre múltiples instancias EC2. Esto nos da:
+
+- **Alta disponibilidad**: si una instancia cae, el tráfico se redirige a las demás
+- **Escalabilidad**: podemos añadir o quitar instancias sin interrupciones
+- **Health checks**: el ELB sondea las instancias y saca del pool las que no respondan
+
+### Creamos y Configuramos nuestro ELB
+
+**EC2** → *Load Balancers* → *Create Load Balancer* → *Application Load Balancer*.
+
+Configuración:
+- **Scheme**: Internet-facing
+- **VPC**: nuestra VPC
+- **Availability Zones**: seleccionamos las AZs donde están nuestros servidores
+- **Subnets**: seleccionamos las subnets **públicas** de cada AZ (el ELB vive en la zona pública y enruta hacia las privadas)
+
+### Configurando el Security Group
+
+El Security Group del ELB debe permitir:
+
+| Tipo | Protocolo | Puerto | Origen |
+|---|---|---|---|
+| HTTP | TCP | 80 | `0.0.0.0/0` |
+| HTTPS | TCP | 443 | `0.0.0.0/0` |
+
+Y el Security Group de los servidores web debe permitir tráfico en el puerto 80 **solo desde el Security Group del ELB**.
+
+Configuramos también el **Target Group**: el grupo de instancias hacia las que el ELB enviará el tráfico. Añadimos nuestras instancias web privadas y configuramos el health check en `/` con protocolo HTTP.
+
+---
+
+## Resultado Final
+
+Con todo configurado, el flujo de tráfico queda así:
+
+1. El usuario accede a la IP pública o dominio del ELB
+2. El ELB distribuye la petición entre los servidores web (round-robin por defecto)
+3. Los servidores web, en subnets privadas, devuelven la respuesta a través del ELB
+4. Para acceso de administración: conexión SSH al Bastion Host → salto al servidor privado
+
+Podemos verificar el balanceo recargando la página varias veces y observando que el identificador del servidor cambia entre respuestas.
+
+<Callout type="info">
+  Este despliegue completo puede realizarse dentro del **free tier de AWS**, usando instancias `t2.micro` y aprovechando las horas gratuitas mensuales incluidas.
+</Callout>
+
+---
+
+## Conclusiones
+
+Con este ejercicio hemos visto cómo:
+
+- Crear y configurar una **VPC** con subnets públicas y privadas
+- Usar un **Internet Gateway** para dar acceso a internet a la subnet pública
+- Usar un **NAT Gateway** para que las instancias privadas puedan acceder a internet sin estar expuestas
+- Implementar el patrón **Bastion Host** para administrar instancias en redes privadas
+- Usar **SSH Agent Forwarding** para evitar almacenar claves privadas en servidores intermedios
+- Configurar un **ELB** para distribuir tráfico y añadir alta disponibilidad
+
+Esta arquitectura, aunque simple, establece las bases de seguridad correctas para cualquier proyecto en AWS. Para profundizar, la [documentación oficial de AWS](https://docs.aws.amazon.com/) es el mejor recurso disponible.

@@ -1,0 +1,202 @@
+---
+import { useTranslations } from '../../i18n';
+const year = new Date().getFullYear();
+const currentPath = Astro.url.pathname;
+const isEs = currentPath.startsWith('/es');
+const T = useTranslations(isEs ? 'es' : 'en');
+const prefix = isEs ? '/es' : '';
+---
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+
+      <!-- Brand -->
+      <div class="footer-brand">
+        <a href="/" class="footer-logo">
+          <span class="logo-main">dump</span><span class="logo-accent">the</span><span class="logo-main">core</span>
+        </a>
+        <p class="footer-tagline">
+          {T.footer.tagline.split('\n').map((line, i) => i === 0 ? line : <><br />{line}</>)}
+        </p>
+        <div class="footer-social">
+          <a href="https://b4rt.dev" target="_blank" rel="noopener noreferrer" aria-label="Portfolio" class="social-link">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2"/>
+              <path d="M8 21h8M12 17v4"/>
+            </svg>
+          </a>
+          <a href="https://github.com" target="_blank" rel="noopener noreferrer" aria-label="GitHub" class="social-link">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2z"/>
+            </svg>
+          </a>
+          <a href="/rss.xml" aria-label="RSS" class="social-link">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19.01 7.38 20 6.18 20C4.98 20 4 19.01 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27V4.44m0 5.66a9.9 9.9 0 0 1 9.9 9.9h-2.83A7.07 7.07 0 0 0 4 12.93V10.1z"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- Nav -->
+      <div class="footer-col">
+        <h3 class="footer-heading">{T.footer.navigate}</h3>
+        <ul class="footer-links">
+          {[
+            { href: `${prefix}/blog`,       label: T.nav.blog },
+            { href: `${prefix}/categories`, label: T.nav.categories },
+            { href: `${prefix}/tags`,       label: T.nav.tags },
+            { href: `${prefix}/about`,      label: T.nav.about },
+            { href: '/search',              label: T.nav.search },
+          ].map(({ href, label }) => (
+            <li><a href={href} class="footer-link">{label}</a></li>
+          ))}
+        </ul>
+      </div>
+
+      <!-- Topics -->
+      <div class="footer-col">
+        <h3 class="footer-heading">{T.footer.topics}</h3>
+        <ul class="footer-links">
+          {[
+            { href: `${prefix}/categories/linux`,     label: 'Linux' },
+            { href: `${prefix}/categories/debugging`, label: 'Debugging' },
+            { href: `${prefix}/tags/performance`,     label: 'Performance' },
+            { href: `${prefix}/tags/c`,               label: 'C Programming' },
+          ].map(({ href, label }) => (
+            <li><a href={href} class="footer-link">{label}</a></li>
+          ))}
+        </ul>
+      </div>
+
+    </div>
+
+    <div class="footer-bottom">
+      <p class="footer-copy">&copy; {year} dumpthecore.com</p>
+      <div class="footer-bottom-links">
+        <a href="/rss.xml" class="footer-link">RSS</a>
+        <span class="footer-dot">·</span>
+        <a href="/sitemap-index.xml" class="footer-link">Sitemap</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    border-top: 1px solid var(--border);
+    background: var(--bg-elevated);
+    margin-top: auto;
+  }
+
+  .footer-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 3.5rem 1.5rem 2rem;
+  }
+
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+    margin-bottom: 3rem;
+  }
+  @media (min-width: 640px) {
+    .footer-grid { grid-template-columns: 2fr 1fr 1fr; gap: 3rem; }
+  }
+
+  .footer-logo {
+    display: inline-block;
+    text-decoration: none;
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 1.1rem;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+  }
+  .logo-main  { color: var(--text); }
+  .logo-accent { color: var(--accent); }
+
+  .footer-tagline {
+    font-size: 0.83rem;
+    color: var(--text-muted);
+    line-height: 1.65;
+    margin: 0 0 1.25rem;
+  }
+
+  .footer-social {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .social-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .social-link:hover {
+    color: var(--text);
+    border-color: var(--accent);
+  }
+
+  .footer-heading {
+    font-family: var(--font-display);
+    font-size: 0.62rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-faint);
+    margin: 0 0 1rem;
+  }
+
+  .footer-links {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .footer-link {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .footer-link:hover { color: var(--accent); }
+
+  .footer-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .footer-copy {
+    font-size: 0.78rem;
+    color: var(--text-faint);
+    margin: 0;
+  }
+
+  .footer-bottom-links {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.78rem;
+  }
+
+  .footer-dot { color: var(--text-faint); }
+</style>

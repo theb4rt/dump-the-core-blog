@@ -1,0 +1,210 @@
+---
+title: "Instalar paquetes en CentOS sin internet"
+slug: "centos-offline"
+description: "Cómo instalar paquetes RPM con todas sus dependencias en un servidor CentOS sin acceso a internet usando repotrack y createrepo."
+pubDate: 2019-04-14
+updatedDate: 2019-04-15
+category: "Linux"
+tags: ["centos", "linux", "yum", "rpm", "offline", "repotrack", "createrepo", "servidores"]
+featured: false
+author: "b4rt"
+lang: "es"
+translationKey: "centos-offline"
+coverImage: "/images/posts/centos.jpg"
+---
+
+import Callout from '../../../components/ui/Callout.astro';
+
+Hace poco tuve un problema al cual nunca me había enfrentado. Tenía que instalar algunos paquetes en un CentOS que no tenía salida a internet y, para no perdernos en detalles, debo aclarar que sería imposible tener salida a internet por políticas de seguridad. Solo tenía acceso a través de SSH, y ese era el reto: instalar estos paquetes en el equipo, sin internet.
+
+## El problema de las dependencias
+
+Al principio me pareció una tarea sencilla. Como hacía cuando quería buscar algún RPM, me dirigí a [pkgs.org](https://pkgs.org/), descargué el RPM, lo subí por SCP y voilá. Ahí fue cuando me di cuenta del error en el cual me encontraba. Para este caso, trataremos de instalar `kwrite`:
+
+```bash
+rpm -ivh kwrite-4.10.5-6.el7.x86_64.rpm
+
+error: Failed dependencies:
+    kate-part(x86-64) = 4.10.5-6.el7 is needed by kwrite-4.10.5-6.el7.x86_64
+    kde-runtime >= 4.10.5 is needed by kwrite-4.10.5-6.el7.x86_64
+```
+
+Resolver esto es sencillo: volver a pkgs.org y descargar las dependencias. Pero en estos casos, lo más fácil sería utilizar YUM directamente:
+
+```bash
+yum install kwrite-4.10.5-6.el7.x86_64.rpm
+```
+
+YUM automáticamente buscará las dependencias y las instalará. Pero, como comentaba al inicio, no dispongo de salida a internet y no puedo usar YUM normalmente.
+
+Lo único que me quedaba era localizar las dependencias, descargar los RPM e instalarlos. Y esa tarea, aunque suene sencilla, no lo es. En un primer nivel el paquete tenía **12 dependencias**, y al intentar instalar la primera dependencia, el nuevo paquete tenía sus propias dependencias, y a su vez esos paquetes tenían más dependencias. En una cuenta rápida, tenía que instalar **más de 100 paquetes**.
+
+Instalar todo de forma manual no era nada óptimo.
+
+---
+
+## La solución: repotrack + createrepo
+
+Revisando por internet encontré dos herramientas clave:
+
+- **`yumdownloader`** — descarga las dependencias de primer nivel (no sirve para este caso).
+- **`repotrack`** — descarga absolutamente todas las dependencias de forma recursiva.
+
+<Callout type="info">
+  Descarté `yumdownloader` porque solo descargaba dependencias de primer nivel, y necesitamos descargar también las dependencias de esas dependencias. `repotrack` resuelve ese problema generando un directorio con absolutamente todas las dependencias requeridas.
+</Callout>
+
+---
+
+## Paso 1 — Levantar un CentOS con internet
+
+El proceso de descarga debe hacerse en una máquina CentOS con las mismas características y con acceso a internet. Esto garantiza que los paquetes descargados sean compatibles con el sistema destino.
+
+---
+
+## Paso 2 — Identificar el paquete con yum search
+
+```bash
+yum search kwrite
+
+Loaded plugins: fastestmirror, langpacks
+============================= N/S matched: kwrite ==============================
+kwrite.x86_64 : Text Editor
+```
+
+Ya que tengamos el nombre del paquete: `kwrite.x86_64`.
+
+---
+
+## Paso 3 — Descargar todas las dependencias con repotrack
+
+```bash
+# Uso básico:
+# repotrack -p [directorio] [paquete]
+
+repotrack -p /home/b4rt/kwrite kwrite.x86_64
+
+Downloading GConf2-3.2.6-8.el7.i686.rpm
+Downloading GConf2-3.2.6-8.el7.x86_64.rpm
+Downloading OpenEXR-libs-1.7.1-7.el7.x86_64.rpm
+Downloading OpenEXR-libs-1.7.1-7.el7.i686.rpm
+...
+```
+
+- **`-p`** — directorio en el cual se descargarán los RPMs.
+- **`kwrite.x86_64`** — nombre del paquete.
+
+<Callout type="tip">
+  Ten en cuenta que los paquetes podrían tardar un buen tiempo en descargarse, así que ve por un café.
+</Callout>
+
+En este caso se descargaron **707 dependencias** (377 MB):
+
+```bash
+find /home/b4rt/kwrite/ -type f -print | wc -l
+707
+
+du -mh /home/b4rt/kwrite/
+377M    /home/b4rt/kwrite/
+```
+
+---
+
+## Paso 4 — Crear el repositorio local con createrepo
+
+```bash
+createrepo /home/b4rt/kwrite/
+
+Spawning worker 0 with 118 pkgs
+Spawning worker 1 with 118 pkgs
+Spawning worker 2 with 118 pkgs
+Spawning worker 3 with 118 pkgs
+Spawning worker 4 with 118 pkgs
+Spawning worker 5 with 117 pkgs
+Workers Finished
+Saving Primary metadata
+Saving file lists metadata
+Saving other metadata
+Generating sqlite DBs
+Sqlite DBs complete
+```
+
+`createrepo` genera un directorio llamado `repodata` dentro del directorio con los RPMs. Este directorio tiene la estructura necesaria (XML, SQLite) para poder utilizarlo como un repositorio de CentOS.
+
+Ahora comprimimos el directorio y lo tendremos listo para mover al servidor principal:
+
+```bash
+tar -zcvf kwrite.tar.gz /home/b4rt/kwrite/
+```
+
+---
+
+## Paso 5 — Configurar el repositorio en el servidor sin internet
+
+Después de cargar el archivo al servidor principal (por SCP o como prefieras), lo descomprimimos:
+
+```bash
+tar -zxvf kwrite.tar.gz -C /home/
+```
+
+Ahora creamos un fichero `.repo` que apunte a nuestro repositorio local. Debe estar ubicado en `/etc/yum.repos.d/`:
+
+```bash
+vim /etc/yum.repos.d/repo_b4rt.repo
+```
+
+Contenido del fichero:
+
+```ini
+[local]
+name=repo_b4rt
+baseurl=file:///home/kwrite
+enabled=1
+gpgcheck=0
+```
+
+| Campo | Descripción |
+|---|---|
+| `name` | Nombre del repositorio |
+| `baseurl` | Ruta local del repositorio |
+| `enabled` | `1` activo, `0` inactivo |
+| `gpgcheck` | `1` valida firmas GPG, `0` deshabilitado (necesario para repos locales) |
+
+---
+
+## Paso 6 — Instalar el paquete desde el repositorio local
+
+Verificamos que YUM lo encuentra (deshabilitando los repos con internet y habilitando solo el local):
+
+```bash
+yum search \
+  --disablerepo=base \
+  --disablerepo=extras \
+  --disablerepo=updates \
+  --disablerepo=epel \
+  --enablerepo=local \
+  kwrite
+
+=============================== N/S matched: kwrite ===============================
+kwrite.x86_64 : Text Editor
+```
+
+Ahora instalamos el paquete:
+
+```bash
+yum install \
+  --disablerepo=base \
+  --disablerepo=extras \
+  --disablerepo=updates \
+  --disablerepo=epel \
+  --enablerepo=local \
+  kwrite
+```
+
+---
+
+Como acabamos de ver, después de todo, ya tenemos instalado nuestro paquete y sabemos cómo crear repositorios locales para hacer instalaciones **completamente offline**.
+
+El proceso de generar el repositorio es algo tedioso, así que hice un **script en Python** que realiza el track de las dependencias, crea el repositorio y comprime el directorio — todo queda listo para mover al servidor principal.
+
+Recuerda que utiliza Python 3.5+. Puedes clonarlo desde [github.com/bl00dyb4rt/Tracker](https://github.com/bl00dyb4rt/Tracker).

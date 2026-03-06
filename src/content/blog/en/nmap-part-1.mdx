@@ -1,0 +1,164 @@
+---
+title: "Nmap Port Scanning Techniques"
+slug: "nmap-part-1"
+description: "A guide to the main Nmap scanning techniques: TCP Connect, SYN, Idle, ACK, X-Mas, and Null scan."
+pubDate: 2019-04-18
+updatedDate: 2019-06-06
+category: "Security"
+tags: ["nmap", "hacking", "security", "ports", "tcp", "pentest", "linux"]
+featured: false
+author: "b4rt"
+lang: "en"
+translationKey: "nmap-part-1"
+series: "Nmap"
+seriesOrder: 1
+coverImage: "/images/posts/nmap-1.jpg"
+---
+
+import Callout from '../../../components/ui/Callout.astro';
+
+In the active reconnaissance phase (when performing a pentest), we begin executing procedures that interact directly with the target system.
+
+The goals of this phase are:
+
+- Identify active systems
+- Identify open ports
+- Identify services and versions on those open ports
+- Identify operating systems
+
+For this, we use **Nmap**, a great open-source tool for network auditing, port scanning, and in some cases, exploiting vulnerabilities using scripts.
+
+<Callout type="info">
+  Nmap doesn't require root privileges to run. The tool adapts to the privileges of the account it's run from. By default, unprivileged accounts use `-sT` scanning and root uses `-sS`.
+</Callout>
+
+## Basic usage
+
+By default, Nmap scans the 1000 most common ports for most services:
+
+```bash
+nmap [ip]
+```
+
+Nmap returns the list of open ports it found and the service running on each.
+
+Nmap defines **6 port states**:
+
+| State | Description |
+|---|---|
+| `open` | The port accepts connections |
+| `closed` | The port is reachable but no service is listening |
+| `filtered` | A firewall or filter prevents Nmap from determining the state |
+| `unfiltered` | The port is reachable, but open/closed state can't be determined |
+| `open\|filtered` | Can't determine whether open or filtered |
+| `closed\|filtered` | Can't determine whether closed or filtered |
+
+---
+
+## TCP Connect Scan (-sT)
+
+This technique performs the normal TCP connection behavior: it uses the **3-way handshake** (SYN → SYN/ACK → ACK).
+
+This has advantages and disadvantages: completing the 3-way handshake is not stealthy, and it's somewhat slower, making scan detection easier. However, it has a very low probability of false positives.
+
+It's the scan executed **by default on unprivileged accounts**:
+
+```bash
+nmap -sT 192.168.1.165
+```
+
+---
+
+## TCP SYN Scan (-sS)
+
+This scan type **never completes the three-way handshake**. A SYN packet is sent as in a normal connection, but everything changes upon receiving a response:
+
+- If a **SYN/ACK** packet is received → the port is **open**.
+- If an **RST** is received → the port is **closed**.
+- If no response is received or an ICMP error is received → the port is **filtered**.
+
+It's a very reliable and also very stealthy type of scan. It's the scan executed **by default with administrator privileges**.
+
+If we try to use it from an unprivileged account:
+
+```bash
+nmap -sS 192.168.1.165
+# You requested a scan type which requires root privileges.
+# QUITTING!
+```
+
+---
+
+## TCP Idle Scan (-sI)
+
+The **Idle Scan** is one of the most complex scanning techniques that exists, and it depends heavily on the machine chosen to play the zombie role.
+
+The attack is very difficult to detect since no packet is sent directly from the attacker's address. It can also bypass various packet filtering controls that prevent connection to hosts outside the network, since we "spoof" the identity of a host that does have permissions on that network.
+
+We need a scenario with at least 3 machines: the **attacker**, the **victim**, and one that serves as the **zombie**.
+
+The process is as follows:
+
+1. First identify that the zombie machine uses a **predictable IP ID algorithm** (consecutive or sequential IDs).
+2. Ensure the zombie machine **has no traffic**, otherwise the scan would be unfeasible.
+3. Perform **IP Spoofing** by sending multiple SYN packets to the victim using the zombie's IP.
+4. The victim's response packets are directed to the zombie, not to us.
+5. Query the zombie for the packet IDs:
+   - If the ID has **incremented** by the previously identified number → the port is **open**.
+   - If the ID is the **same** → the port is **closed**.
+
+```bash
+nmap -sI [ZOMBIE_IP] [VICTIM_IP]
+```
+
+<Callout type="warning">
+  This example is very basic. The Idle Scan is one of the most dangerous and complex scanning types that exist. The [official Nmap documentation](https://nmap.org/book/idlescan.html) explains it in great detail.
+</Callout>
+
+---
+
+## TCP ACK Scan (-sA)
+
+This technique **is not specifically used to detect port state**, but rather to **verify firewall state**.
+
+If an ACK packet is sent in a normal connection, it would do nothing. If the firewall doesn't maintain connection state, it would pass the packet through. Two things can happen:
+
+- If the port is **open** → the system typically responds with nothing.
+- If the port is **closed** → an RST is returned.
+
+This way we can determine if the port is open or closed, and also whether the firewall maintains connection state:
+
+```bash
+nmap -sA [IP]
+```
+
+---
+
+## TCP X-Mas Scan (-sX)
+
+This technique is based on sending a packet with the **FIN, URG and PSH** flags set (like a lit Christmas tree, hence the name).
+
+Windows doesn't currently respond to this technique. On Unix/Linux systems:
+- If the port is **closed** → RST+ACK is sent back.
+- If the port is **open** → no response.
+
+```bash
+nmap -sX [IP]
+```
+
+---
+
+## TCP Null Scan (-sN)
+
+This scan type sends a packet that **has no flags set at all**.
+
+- If the port is **open** → no response is received.
+- If the port is **closed** → the system responds with RST + ACK.
+
+```bash
+nmap -sN [IP]
+```
+
+---
+
+I'd recommend reading about TCP/IP, common ports and their services. This will make the second part easier to understand, where we'll see how to gather detailed service information with `-sV`, `-O`, and Nmap scripts.

@@ -1,0 +1,176 @@
+---
+title: "Comandos mágicos: Grep!"
+slug: "grep"
+description: "Guía práctica de grep con ejemplos reales: filtrar logs, buscar patrones, regex y scripting bash."
+pubDate: 2019-07-01
+updatedDate: 2020-05-04
+category: "Linux"
+tags: ["linux", "grep", "cli", "bash", "regex", "terminal", "servidores"]
+featured: false
+author: "b4rt"
+lang: "es"
+translationKey: "grep"
+series: "Comandos Mágicos"
+seriesOrder: 1
+coverImage: "/images/posts/grep.jpg"
+---
+
+import Callout from '../../../components/ui/Callout.astro';
+
+Si te gusta pasearte por la terminal, es parte de tu día a día trabajar en esa consola de pequeñas letras, te habrás topado con varias situaciones tan particulares como complejas, que se podrían solucionar haciendo algún script que automatice ciertos procesos. Vamos a ver algunos ejemplos del uso del comando grep!
+
+## ¿Qué es grep?
+
+Es un programa, pequeño en tamaño pero grande en funcionalidades, el cual nos permitirá buscar patrones de "texto" dentro de algún fichero, archivo, lista…
+
+Primero un ejemplo sencillo del uso para entender cómo funciona.
+
+---
+
+## Ejemplo 1 — Filtrar la salida de ls
+
+Listamos todo lo que haya dentro de un directorio, pero vamos a filtrar esa búsqueda por el tipo de formato — por ejemplo, buscar solo los ficheros con extensión `.txt`, `.lst`, o encontrar las imágenes `.jpg`. Para esto concatenamos la salida del comando con grep:
+
+```bash
+ls -l | grep txt
+```
+
+Como vemos en el output, podemos filtrar primero por la extensión `.lst`, luego por `.txt` y finalmente por `.jpg`.
+
+---
+
+## Ejemplo 2 — Buscar en /etc/passwd
+
+Tenemos el fichero `/etc/passwd` que, como sabemos, tiene información de los usuarios del sistema. Usaremos 2 formas:
+
+La primera es utilizando `cat` para imprimir el contenido y concatenar grep:
+
+```bash
+cat /etc/passwd | grep root
+```
+
+La segunda es usando solamente grep. La salida será la misma:
+
+```bash
+grep root /etc/passwd
+```
+
+---
+
+## Ejemplo 3 — Invertir la búsqueda con -v
+
+¿Qué pasa si queremos imprimir todo ignorando las líneas que tengan el texto deseado? Un ejemplo: en el fichero `/etc/passwd`, quiero imprimir los usuarios que no tienen permisos de loguearse en el sistema. Los usuarios con `nologin` son los que no pueden loguearse. Podemos mostrar a todos los demás utilizando el flag `-v`:
+
+```bash
+grep -v "nologin" /etc/passwd
+```
+
+Identificando los PIDs > 1000, podemos darnos cuenta de que los usuarios `b4rt`, `test`, `admin` y `root` pueden loguearse en el sistema. Aún podemos optimizar esta salida, ignorando también las líneas que tengan `/bin/false`:
+
+```bash
+grep -v "nologin" /etc/passwd | grep -v "/bin/false"
+```
+
+Es simplemente imaginarse algo e intentar hacerlo. Podemos filtrar los que usen la shell `/bin/sh` y los que usen ZSH (dicho sea de paso, mi shell favorita).
+
+---
+
+## Ejemplo 4 — Analizar logs de servidor web
+
+Para este ejemplo vamos en busca de los logs de un servidor web. Tengo una IP que se ha conectado a mi sitio web y quiero buscar todos los errores `404` que ha provocado, tal vez haciendo algún escaneo. Utilizaremos `tail` para ver los logs:
+
+```bash
+tail -900 /var/log/httpd/access_log | grep "37.46.114.43" | grep "404"
+```
+
+Primero imprimimos los logs, filtramos ese resultado por una IP, y nuevamente filtramos esa salida buscando las coincidencias con `404`. De esta forma tenemos en pantalla solo las peticiones realizadas por la IP que provocaron un error 404.
+
+---
+
+## Ejemplo 5 — Filtrar archivos de configuración
+
+Imagina que quieres ver el archivo de configuración `sshd_config`, pero no deseas abrir vim ni ver todo por consola. Solo quieres ver las líneas activas, es decir, las líneas no comentadas. Podríamos utilizar el flag `-v` para omitir las líneas que contengan un `#`, pero el output mostraría los saltos de línea:
+
+```bash
+grep -v "#" /etc/ssh/sshd_config
+```
+
+---
+
+## Ejemplo 6 — Imprimir solo líneas que empiezan por alfanumérico
+
+Hay otra forma más limpia: imprimir todas las líneas que **empiecen** por una letra o un número. De esta forma ignoramos cualquier carácter especial al inicio de una línea — ideal para archivos de configuración:
+
+```bash
+grep "^[[:alnum:]]" /etc/ssh/sshd_config
+```
+
+En el comando utilizamos `[[:alnum:]]`, un código predefinido para tener un pattern. También utilizamos el símbolo `^`, el cual sirve para buscar coincidencias al inicio de la fila.
+
+### Tabla de patterns POSIX
+
+| Pattern | Descripción |
+|---|---|
+| `[[:alnum:]]` | A-Z, a-z, 0-9 |
+| `[[:alpha:]]` | A-Z, a-z |
+| `[[:digit:]]` | 0-9 |
+| `[[:blank:]]` | Espacios y tabuladores |
+| `[[:upper:]]` | A-Z |
+| `[[:lower:]]` | a-z |
+| `[[:punct:]]` | `! " # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \ ] ^ _ { \| } ~` |
+| `[[:graph:]]` | Alfanuméricos y puntuación |
+| `[[:space:]]` | Espacios en blanco, tabs, saltos de línea |
+| `[[:print:]]` | Alfanuméricos, puntuación y espacios en blanco |
+| `[[:xdigit:]]` | Hexadecimales (A-F, a-f, 0-9) |
+
+---
+
+## Ejemplo 7 — grep -F y grep -E
+
+**`grep -F`** nos permite utilizar un fichero en el cual hayamos declarado una lista de palabras para buscar en otro. Grep buscará todas las coincidencias.
+
+Por ejemplo, si tenemos el fichero `lista.txt` con varias palabras:
+
+```bash
+grep -F -f lista.txt archivo_a_buscar.txt
+```
+
+**`grep -E`** nos permite utilizar uno o muchos strings para buscar entre algún fichero:
+
+```bash
+grep -E 'string1|string2|string3' fichero.log
+```
+
+Un ejemplo buscando múltiples IPs en un log:
+
+```bash
+grep -E '192.168.1.10|10.0.0.5|172.16.0.1' /var/log/httpd/access_log
+```
+
+---
+
+## Ejemplo 8 — Descubrir hosts en red con bash + grep
+
+Utilizando algo de scripting con bash, podemos usar grep y un simple ping para descubrir los equipos de red que estén conectados (que respondan al ping):
+
+```bash
+for i in {1..255}; do ping -c 1 -W 1 192.168.1.$i | grep 'from'; done
+```
+
+---
+
+## Ejemplo 9 — grep con REGEX avanzado
+
+Un ejemplo para ver la IP local, usando REGEX en grep:
+
+```bash
+ip addr | grep -Po '(?!(inet 127.\d.\d.1))(inet \K(\d{1,3}\.){3}\d{1,3})'
+```
+
+<Callout type="tip">
+  El flag `-P` activa las Perl-compatible regular expressions (PCRE) en grep. El flag `-o` imprime solo la parte que coincide con el patrón, en lugar de la línea completa.
+</Callout>
+
+---
+
+Hasta ahora, creo que ya tenemos lo básico para utilizar grep. Ahora vamos con el comando **FIND**.

@@ -1,0 +1,309 @@
+---
+import ThemeToggle from '../ui/ThemeToggle.tsx';
+import SearchButton from '../ui/SearchButton.tsx';
+import { useTranslations } from '../../i18n';
+
+const currentPath = Astro.url.pathname;
+const isEs = currentPath.startsWith('/es');
+const currentLang = isEs ? 'es' : 'en';
+const T = useTranslations(currentLang);
+const prefix = isEs ? '/es' : '';
+
+const navLinks = [
+  { href: `${prefix}/blog`,       label: T.nav.blog },
+  { href: `${prefix}/categories`, label: T.nav.categories },
+  { href: `${prefix}/tags`,       label: T.nav.tags },
+  { href: `${prefix}/about`,      label: T.nav.about },
+];
+
+// Best-effort alternate URLs
+const enHref = isEs ? (currentPath.slice(3) || '/') : currentPath;
+const esHref = isEs ? currentPath : (
+  currentPath === '/' ? '/es' :
+  currentPath.startsWith('/blog') || currentPath.startsWith('/categories') || currentPath.startsWith('/tags') || currentPath.startsWith('/about')
+    ? `/es${currentPath}`
+    : '/es/blog'
+);
+---
+
+<header class="site-header">
+  <!-- Top accent bar -->
+  <div class="accent-bar" aria-hidden="true"></div>
+
+  <div class="header-inner">
+    <!-- Logo -->
+    <a href="/" class="logo" aria-label="dumpthecore home">
+      <span class="logo-main">dump</span><span class="logo-accent">the</span><span class="logo-main">core</span>
+    </a>
+
+    <!-- Desktop nav -->
+    <nav class="desktop-nav" aria-label="Main navigation">
+      {navLinks.map(({ href, label }) => {
+        const isActive = currentPath === href || currentPath.startsWith(href + '/');
+        return (
+          <a href={href} class={`nav-link ${isActive ? 'active' : ''}`}>
+            {label}
+          </a>
+        );
+      })}
+    </nav>
+
+    <!-- Right actions -->
+    <div class="header-actions">
+      <!-- Portfolio -->
+      <a
+        href="https://b4rt.dev"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Portfolio"
+        class="icon-btn"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2"/>
+          <path d="M8 21h8M12 17v4"/>
+        </svg>
+      </a>
+
+      <!-- GitHub -->
+      <a
+        href="https://github.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="GitHub"
+        class="icon-btn"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2z"/>
+        </svg>
+      </a>
+
+      <!-- RSS -->
+      <a href="/rss.xml" aria-label="RSS Feed" class="icon-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19.01 7.38 20 6.18 20C4.98 20 4 19.01 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27V4.44m0 5.66a9.9 9.9 0 0 1 9.9 9.9h-2.83A7.07 7.07 0 0 0 4 12.93V10.1z"/>
+        </svg>
+      </a>
+
+      <!-- Lang switcher -->
+      <div class="lang-pill" role="group" aria-label="Language">
+        <a href={enHref} class={`lang-opt ${currentLang === 'en' ? 'lang-active' : ''}`} aria-current={currentLang === 'en' ? 'true' : undefined}>EN</a>
+        <a href={esHref} class={`lang-opt ${currentLang === 'es' ? 'lang-active' : ''}`} aria-current={currentLang === 'es' ? 'true' : undefined}>ES</a>
+      </div>
+
+      <SearchButton client:load />
+      <ThemeToggle client:load />
+
+      <!-- Mobile toggle -->
+      <button
+        id="mobile-menu-btn"
+        aria-label="Toggle menu"
+        aria-expanded="false"
+        class="icon-btn mobile-toggle"
+      >
+        <svg id="menu-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="4" y1="6" x2="20" y2="6"/>
+          <line x1="4" y1="12" x2="20" y2="12"/>
+          <line x1="4" y1="18" x2="20" y2="18"/>
+        </svg>
+        <svg id="close-icon" class="hidden" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 6 6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Mobile nav -->
+  <div id="mobile-nav" class="mobile-nav hidden">
+    {navLinks.map(({ href, label }) => {
+      const isActive = currentPath === href || currentPath.startsWith(href + '/');
+      return (
+        <a href={href} class={`mobile-nav-link ${isActive ? 'active' : ''}`}>
+          {label}
+        </a>
+      );
+    })}
+    <div class="mobile-lang-row">
+      <a href={enHref} class={`mobile-nav-link ${currentLang === 'en' ? 'active' : ''}`}>EN — English</a>
+      <a href={esHref} class={`mobile-nav-link ${currentLang === 'es' ? 'active' : ''}`}>ES — Español</a>
+
+    </div>
+  </div>
+</header>
+
+<style>
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .accent-bar {
+    height: 3px;
+    background: var(--accent);
+    width: 100%;
+  }
+
+  .header-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2rem;
+  }
+
+  .logo {
+    text-decoration: none;
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 1.2rem;
+    letter-spacing: -0.03em;
+    flex-shrink: 0;
+    text-transform: uppercase;
+  }
+  .logo-main  { color: var(--text); }
+  .logo-accent { color: var(--accent); }
+
+  .desktop-nav {
+    display: none;
+    align-items: center;
+    gap: 0.125rem;
+    flex: 1;
+  }
+  @media (min-width: 768px) {
+    .desktop-nav { display: flex; }
+  }
+
+  .nav-link {
+    padding: 0.4rem 0.875rem;
+    font-family: var(--font-display);
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-decoration: none;
+    color: var(--text-muted);
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+  }
+  .nav-link:hover {
+    color: var(--text);
+    background: var(--bg-hover);
+  }
+  .nav-link.active {
+    color: var(--accent);
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    flex-shrink: 0;
+  }
+
+  .icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+  }
+  .icon-btn:hover {
+    color: var(--text);
+    background: var(--bg-hover);
+  }
+
+  .lang-pill {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .lang-opt {
+    padding: 0.25rem 0.55rem;
+    font-family: var(--font-display);
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.15s, background 0.15s;
+    line-height: 1;
+  }
+  .lang-opt:hover { color: var(--text); background: var(--bg-hover); }
+  .lang-opt.lang-active {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .mobile-toggle {
+    display: flex;
+  }
+  @media (min-width: 768px) {
+    .mobile-toggle { display: none; }
+  }
+
+  .mobile-nav {
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+    padding: 1rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .mobile-nav.hidden { display: none; }
+
+  .mobile-nav-link {
+    padding: 0.625rem 0.75rem;
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    text-decoration: none;
+    color: var(--text-muted);
+    border-radius: 4px;
+    transition: color 0.15s;
+  }
+  .mobile-nav-link.active { color: var(--accent); }
+  .mobile-nav-link:hover  { color: var(--text); }
+
+  .mobile-lang-row {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 0.25rem;
+  }
+</style>
+
+<script>
+  const btn      = document.getElementById('mobile-menu-btn');
+  const nav      = document.getElementById('mobile-nav');
+  const menuIcon = document.getElementById('menu-icon');
+  const closeIcon = document.getElementById('close-icon');
+
+  btn?.addEventListener('click', () => {
+    const isOpen = !nav?.classList.contains('hidden');
+    nav?.classList.toggle('hidden', isOpen);
+    menuIcon?.classList.toggle('hidden', !isOpen);
+    closeIcon?.classList.toggle('hidden', isOpen);
+    btn.setAttribute('aria-expanded', String(!isOpen));
+  });
+</script>

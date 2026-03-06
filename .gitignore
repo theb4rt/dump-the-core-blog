@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Astro generated files
+.astro/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Environment variables
+.env
+
+# Vercel
+.vercel/
+
+# Logs
+pnpm-debug.log*
+
+.claude

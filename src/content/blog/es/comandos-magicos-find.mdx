@@ -1,0 +1,207 @@
+---
+title: "Comandos mágicos: Find!"
+slug: "find"
+description: "Guía práctica de find con ejemplos reales: buscar por nombre, tipo, usuario, permisos y ejecutar acciones."
+pubDate: 2019-06-25
+updatedDate: 2020-05-12
+category: "Linux"
+tags: ["linux", "find", "cli", "bash", "terminal", "servidores"]
+featured: false
+author: "b4rt"
+lang: "es"
+translationKey: "find"
+series: "Comandos Mágicos"
+seriesOrder: 2
+coverImage: "/images/posts/find.jpg"
+---
+
+import Callout from '../../../components/ui/Callout.astro';
+
+`find` es uno de mis comandos favoritos, no solo porque me ha salvado la vida en múltiples ocasiones, sino por la cantidad de usos que le podemos dar. Find básicamente sirve para buscar algo dentro del sistema operativo; la mejor parte es que, gradualmente, podemos ejecutar alguna acción sobre lo que encontramos.
+
+## Uso básico
+
+```bash
+find "path_a_buscar" -name "nombre_de_fichero"
+```
+
+Donde:
+- **path_a_buscar** — es la ruta completa donde buscaremos el fichero.
+- **-name** — opción para buscar por nombre. Recuerda que es case sensitive.
+- **nombre_de_fichero** — es el nombre del fichero a buscar.
+
+<Callout type="info">
+  `find` trabaja con los privilegios de la cuenta actual. Si no tenemos privilegios de lectura en algún directorio, no podremos buscar dentro de él. Usa `sudo` para búsquedas en el sistema completo.
+</Callout>
+
+---
+
+## Ejemplo 1 — Buscar un fichero en todo el sistema
+
+Buscaremos el fichero `pg_hba.conf`, donde se encuentra la configuración de PostgreSQL. Usamos `/` para buscar en todo el sistema:
+
+```bash
+find / -name pg_hba.conf
+```
+
+Como usuario normal veremos errores de "Permission denied" en directorios del sistema. Como root (o con `sudo`), obtendremos la ruta completa sin restricciones.
+
+---
+
+## Ejemplo 2 — Buscar por tipo
+
+Usamos `-type` para especificar si buscamos directorios o ficheros.
+
+**Buscar directorios (`-type d`):**
+
+```bash
+find /home/ -type d -name 'movies'
+```
+
+**Buscar ficheros (`-type f`):** Aquí usamos `*` para buscar todas las imágenes de un formato:
+
+```bash
+find /home/ -type f -name '*.jpg'
+```
+
+---
+
+## Ejemplo 3 — Buscar por usuario (UID)
+
+Si queremos buscar directorios o ficheros cuyo propietario sea un usuario concreto, usamos `-uid`. Esto es muy útil cuando en un sistema tenemos un usuario malicioso y queremos encontrar todos los ficheros que ha creado. Primero identificamos el ID que tiene el usuario:
+
+```bash
+id nombre_usuario
+# uid=1001(b4rt) gid=1001(b4rt) groups=1001(b4rt)
+
+find / -uid 1001
+```
+
+---
+
+## Ejemplo 4 — Buscar por grupo
+
+De la misma forma, si queremos buscar por un grupo concreto, usamos `-group` seguido del nombre o ID del grupo:
+
+```bash
+find / -group developers
+# o por GID:
+find / -gid 1002
+```
+
+---
+
+## Ejemplo 5 — Buscar por permisos
+
+Podemos buscar ficheros con permisos específicos usando `-perm`:
+
+```bash
+# Ficheros con permisos exactamente 644
+find /home/ -type f -perm 644
+
+# Ficheros con el bit SUID activo (potencial riesgo de seguridad)
+find / -type f -perm -4000
+
+# Ficheros escribibles por cualquier usuario
+find / -type f -perm -o+w
+```
+
+<Callout type="warning">
+  Buscar ficheros con SUID (`-perm -4000`) es una técnica habitual en auditorías de seguridad para identificar posibles vectores de escalada de privilegios.
+</Callout>
+
+---
+
+## Ejemplo 6 — Buscar por tiempo de modificación
+
+Podemos buscar ficheros modificados en los últimos N días con `-mtime`:
+
+```bash
+# Ficheros modificados en las últimas 24 horas
+find /var/log/ -type f -mtime -1
+
+# Ficheros modificados hace más de 30 días
+find /home/ -type f -mtime +30
+
+# Ficheros modificados exactamente hace 7 días
+find /home/ -type f -mtime 7
+```
+
+---
+
+## Ejemplo 7 — Buscar por tamaño
+
+Con `-size` podemos buscar ficheros por tamaño:
+
+```bash
+# Ficheros mayores de 100MB
+find / -type f -size +100M
+
+# Ficheros menores de 1KB (posiblemente vacíos o dummies)
+find /tmp/ -type f -size -1k
+
+# Ficheros de exactamente 0 bytes
+find /var/log/ -type f -empty
+```
+
+---
+
+## Ejemplo 8 — Ejecutar acciones sobre los resultados
+
+La verdadera potencia de `find` es poder ejecutar acciones sobre lo que encuentra, usando `-exec`:
+
+```bash
+# Borrar todos los ficheros .log mayores de 7 días
+find /var/log/ -type f -name '*.log' -mtime +7 -exec rm {} \;
+
+# Cambiar permisos a todos los .sh encontrados
+find /home/b4rt/scripts/ -type f -name '*.sh' -exec chmod +x {} \;
+
+# Copiar todos los .conf a un directorio de backup
+find /etc/ -type f -name '*.conf' -exec cp {} /backup/etc/ \;
+```
+
+<Callout type="tip">
+  Usa `\;` al final del `-exec` para ejecutar el comando una vez por cada resultado. Usa `+` en lugar de `\;` para pasarle todos los resultados al comando de una sola vez (más eficiente):
+
+  ```bash
+  find /tmp/ -type f -empty -exec rm {} +
+  ```
+</Callout>
+
+---
+
+## Ejemplo 9 — Combinar condiciones
+
+Podemos combinar múltiples condiciones con `-and` (implícito), `-or` y `!` (negación):
+
+```bash
+# Ficheros .jpg O .png
+find /home/ -type f \( -name '*.jpg' -o -name '*.png' \)
+
+# Ficheros .conf que NO sean de root
+find /etc/ -type f -name '*.conf' ! -user root
+
+# Directorios vacíos
+find /tmp/ -type d -empty
+```
+
+---
+
+## Resumen de opciones más usadas
+
+| Opción | Descripción |
+|---|---|
+| `-name` | Buscar por nombre (case sensitive) |
+| `-iname` | Buscar por nombre (case insensitive) |
+| `-type f/d/l` | Buscar ficheros / directorios / symlinks |
+| `-uid / -gid` | Buscar por UID o GID |
+| `-user / -group` | Buscar por nombre de usuario o grupo |
+| `-perm` | Buscar por permisos |
+| `-size` | Buscar por tamaño |
+| `-mtime / -atime / -ctime` | Buscar por tiempo de modificación / acceso / cambio |
+| `-empty` | Buscar ficheros o directorios vacíos |
+| `-exec` | Ejecutar un comando sobre los resultados |
+| `-delete` | Borrar los resultados directamente |
+
+`find` combinado con `grep`, `xargs` o `exec` es una herramienta muy poderosa para administración de sistemas, auditorías de seguridad y scripting.

@@ -1,0 +1,107 @@
+/* Prose overrides — editorial dark theme */
+.prose {
+  --tw-prose-body:        var(--text);
+  --tw-prose-headings:    var(--text);
+  --tw-prose-lead:        var(--text-muted);
+  --tw-prose-links:       var(--accent);
+  --tw-prose-bold:        var(--text);
+  --tw-prose-counters:    var(--text-muted);
+  --tw-prose-bullets:     var(--text-muted);
+  --tw-prose-hr:          var(--border);
+  --tw-prose-quotes:      var(--text);
+  --tw-prose-quote-borders: var(--accent);
+  --tw-prose-captions:    var(--text-muted);
+  --tw-prose-code:        var(--text);
+  --tw-prose-pre-code:    var(--text);
+  --tw-prose-pre-bg:      var(--bg-elevated);
+  --tw-prose-th-borders:  var(--border);
+  --tw-prose-td-borders:  var(--border);
+
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.8;
+}
+
+/* Headings — Montserrat heavy */
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  scroll-margin-top: 5rem;
+  color: var(--text);
+}
+
+.prose h2 {
+  font-size: 1.55rem;
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.prose h3 { font-size: 1.2rem; }
+
+/* Inline code */
+.prose :not(pre) > code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.15em 0.4em;
+  color: var(--accent);
+}
+.prose :not(pre) > code::before,
+.prose :not(pre) > code::after { content: none; }
+
+/* Links */
+.prose a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.15s;
+}
+.prose a:hover {
+  text-decoration-color: var(--accent);
+}
+
+/* Blockquote */
+.prose blockquote {
+  border-left: 3px solid var(--accent);
+  background: var(--bg-elevated);
+  border-radius: 0 6px 6px 0;
+  padding: 1rem 1.25rem;
+  font-style: normal;
+  color: var(--text);
+}
+.prose blockquote p:first-of-type::before,
+.prose blockquote p:last-of-type::after { content: none; }
+
+/* Tables */
+.prose th {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--bg-elevated);
+}
+.prose th, .prose td { border: 1px solid var(--border); padding: 0.6rem 1rem; }
+
+/* Images */
+.prose img {
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+/* HR */
+.prose hr { border-color: var(--border); }
+
+/* Strong */
+.prose strong {
+  color: var(--text);
+  font-weight: 700;
+}

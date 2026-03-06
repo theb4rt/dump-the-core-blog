@@ -1,0 +1,176 @@
+---
+title: "Magic Commands: Grep!"
+slug: "grep"
+description: "A practical guide to grep with real examples: filtering logs, searching patterns, regex and bash scripting."
+pubDate: 2019-07-01
+updatedDate: 2020-05-04
+category: "Linux"
+tags: ["linux", "grep", "cli", "bash", "regex", "terminal", "servers"]
+featured: false
+author: "b4rt"
+lang: "en"
+translationKey: "grep"
+series: "Magic Commands"
+seriesOrder: 1
+coverImage: "/images/posts/grep.jpg"
+---
+
+import Callout from '../../../components/ui/Callout.astro';
+
+If you spend time in the terminal — if it's part of your daily workflow to work in that console of small letters — you've probably run into situations that are both particular and complex, situations that could be solved by writing a script to automate certain processes. Let's look at some real examples of using the `grep` command!
+
+## What is grep?
+
+It's a small program in size but large in functionality. It lets us search for text patterns within a file, an output, a list…
+
+Here's a simple example to understand how it works.
+
+---
+
+## Example 1 — Filter ls output
+
+List everything in a directory, but filter that search by file type — for example, find only `.txt`, `.lst`, or `.jpg` image files. We pipe the command output into grep:
+
+```bash
+ls -l | grep txt
+```
+
+As you can see in the output, we can filter first by `.lst` extension, then by `.txt`, and finally by `.jpg`.
+
+---
+
+## Example 2 — Search in /etc/passwd
+
+We have the `/etc/passwd` file which, as we know, contains system user information. We'll use 2 approaches:
+
+The first is using `cat` to print the content and pipe it into grep:
+
+```bash
+cat /etc/passwd | grep root
+```
+
+The second is using only grep. The output will be the same:
+
+```bash
+grep root /etc/passwd
+```
+
+---
+
+## Example 3 — Invert the search with -v
+
+What if we want to print everything while ignoring lines that contain the desired text? For example: in `/etc/passwd`, I want to print users who don't have login permissions. Users with `nologin` are the ones who can't log in. We can show everyone else using the `-v` flag:
+
+```bash
+grep -v "nologin" /etc/passwd
+```
+
+By looking at PIDs > 1000, we can tell that users `b4rt`, `test`, `admin` and `root` can log in to the system. We can further refine this output by also ignoring lines containing `/bin/false`:
+
+```bash
+grep -v "nologin" /etc/passwd | grep -v "/bin/false"
+```
+
+It's simply a matter of imagining something and trying to do it. We can filter those using the `/bin/sh` shell and those using ZSH (my personal favorite shell).
+
+---
+
+## Example 4 — Analyze web server logs
+
+For this example we'll look at web server logs. I have an IP that connected to my website and I want to find all the `404` errors it caused — perhaps from a scan. We'll use `tail` to view the logs:
+
+```bash
+tail -900 /var/log/httpd/access_log | grep "37.46.114.43" | grep "404"
+```
+
+First we print the logs, filter the result by IP, then filter that output again searching for `404` matches. This gives us only the requests from that IP that caused a 404 error.
+
+---
+
+## Example 5 — Filter configuration files
+
+Imagine you want to view the `sshd_config` configuration file, but you don't want to open vim or see everything in the console. You only want to see the active lines — the uncommented lines. We could use `-v` to skip lines containing `#`, but the output would still include blank lines:
+
+```bash
+grep -v "#" /etc/ssh/sshd_config
+```
+
+---
+
+## Example 6 — Print only lines starting with alphanumeric characters
+
+There's a cleaner approach: print all lines that **start** with a letter or number. This ignores any special character at the start of a line — ideal for configuration files:
+
+```bash
+grep "^[[:alnum:]]" /etc/ssh/sshd_config
+```
+
+In this command we use `[[:alnum:]]`, a predefined code for a pattern. We also use the `^` symbol, which matches the beginning of a line.
+
+### POSIX pattern table
+
+| Pattern | Description |
+|---|---|
+| `[[:alnum:]]` | A-Z, a-z, 0-9 |
+| `[[:alpha:]]` | A-Z, a-z |
+| `[[:digit:]]` | 0-9 |
+| `[[:blank:]]` | Spaces and tabs |
+| `[[:upper:]]` | A-Z |
+| `[[:lower:]]` | a-z |
+| `[[:punct:]]` | `! " # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \ ] ^ _ { \| } ~` |
+| `[[:graph:]]` | Alphanumeric and punctuation |
+| `[[:space:]]` | Whitespace, tabs, newlines |
+| `[[:print:]]` | Alphanumeric, punctuation and whitespace |
+| `[[:xdigit:]]` | Hexadecimal (A-F, a-f, 0-9) |
+
+---
+
+## Example 7 — grep -F and grep -E
+
+**`grep -F`** lets us use a file containing a list of words to search for in another file. Grep will find all matches.
+
+For example, if we have a `list.txt` file with several words:
+
+```bash
+grep -F -f list.txt file_to_search.txt
+```
+
+**`grep -E`** lets us use one or many strings to search within a file:
+
+```bash
+grep -E 'string1|string2|string3' file.log
+```
+
+An example searching for multiple IPs in a log:
+
+```bash
+grep -E '192.168.1.10|10.0.0.5|172.16.0.1' /var/log/httpd/access_log
+```
+
+---
+
+## Example 8 — Discover network hosts with bash + grep
+
+Using some bash scripting, we can use grep and a simple ping to discover connected network devices (those that respond to ping):
+
+```bash
+for i in {1..255}; do ping -c 1 -W 1 192.168.1.$i | grep 'from'; done
+```
+
+---
+
+## Example 9 — grep with advanced REGEX
+
+An example to find the local IP, using REGEX in grep:
+
+```bash
+ip addr | grep -Po '(?!(inet 127.\d.\d.1))(inet \K(\d{1,3}\.){3}\d{1,3})'
+```
+
+<Callout type="tip">
+  The `-P` flag enables Perl-compatible regular expressions (PCRE) in grep. The `-o` flag prints only the part that matches the pattern, instead of the entire line.
+</Callout>
+
+---
+
+By now, we have the basics to use grep effectively. Next up: the **FIND** command.

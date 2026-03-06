@@ -1,0 +1,79 @@
+---
+interface Heading {
+  depth: number;
+  slug: string;
+  text: string;
+}
+
+interface Props {
+  headings: Heading[];
+}
+
+const { headings } = Astro.props;
+const filtered = headings.filter((h) => h.depth === 2 || h.depth === 3);
+---
+
+{filtered.length > 0 && (
+  <nav
+    id="toc"
+    aria-label="Table of contents"
+    style="position: sticky; top: 6rem; padding: 1.25rem; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px; font-size: 0.825rem;"
+  >
+    <p style="font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 0.75rem;">
+      On this page
+    </p>
+    <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.125rem;">
+      {filtered.map((h) => (
+        <li>
+          <a
+            href={`#${h.slug}`}
+            data-heading={h.slug}
+            style={`
+              display: block;
+              padding: 0.25rem 0.5rem;
+              border-radius: 4px;
+              color: var(--text-muted);
+              text-decoration: none;
+              transition: color 0.15s, background 0.15s;
+              ${h.depth === 3 ? 'padding-left: 1.25rem;' : ''}
+            `}
+          >
+            {h.text}
+          </a>
+        </li>
+      ))}
+    </ul>
+  </nav>
+)}
+
+<script>
+  const links = document.querySelectorAll<HTMLAnchorElement>('[data-heading]');
+  const headingEls = Array.from(links).map((link) => {
+    const id = link.getAttribute('data-heading')!;
+    return document.getElementById(id);
+  });
+
+  function setActive(id: string | null) {
+    links.forEach((link) => {
+      const isActive = link.getAttribute('data-heading') === id;
+      link.style.color = isActive ? 'var(--accent)' : 'var(--text-muted)';
+      link.style.background = isActive
+        ? 'color-mix(in srgb, var(--accent) 10%, transparent)'
+        : 'transparent';
+    });
+  }
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          setActive(entry.target.id);
+          break;
+        }
+      }
+    },
+    { rootMargin: '0px 0px -70% 0px', threshold: 0 }
+  );
+
+  headingEls.forEach((el) => el && observer.observe(el));
+</script>
