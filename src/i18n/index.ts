@@ -11,7 +11,7 @@ const en = {
   footer: {
     navigate: 'Navigate',
     topics: 'Topics',
-    tagline: 'A developer blog about systems, software,\nand the things that break at 3am.',
+    tagline: 'Linux, software, and bad decisions compiled in production.',
   },
   home: {
     siteDescription: 'A developer blog about Linux, systems programming, debugging, and the things that break at 3am.',
@@ -69,7 +69,7 @@ const es: typeof en = {
   footer: {
     navigate: 'Navegar',
     topics: 'Temas',
-    tagline: 'Un blog de desarrollador sobre sistemas, software\ny las cosas que se rompen a las 3am.',
+    tagline: 'Linux, software y malas decisiones compiladas en producción.',
   },
   home: {
     siteDescription: 'Un blog de desarrollador sobre Linux, programación de sistemas, debugging y las cosas que se rompen a las 3am.',
