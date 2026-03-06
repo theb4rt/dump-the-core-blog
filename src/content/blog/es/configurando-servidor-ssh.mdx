@@ -1,0 +1,184 @@
+---
+title: "Configurando el servidor SSH"
+slug: "ssh-part-3"
+description: "Guía práctica para endurecer sshd_config: deshabilitar login como root, forzar autenticación por clave, restringir usuarios y ajustar las opciones más importantes del servidor SSH."
+pubDate: 2019-03-13
+updatedDate: 2019-06-06
+category: "Security"
+tags: ["ssh", "linux", "seguridad", "servidores", "hardening", "sshd"]
+featured: false
+author: "b4rt"
+lang: "es"
+translationKey: "ssh-part-3"
+series: "SSH"
+seriesOrder: 3
+---
+
+import Callout from '../../../components/ui/Callout.astro';
+
+Ya vimos qué es SSH y cómo funcionan los pares de claves. Ahora vamos a configurar el servidor en sí. Una instalación SSH por defecto es funcional pero no está endurecida — acepta logins por contraseña, permite acceso como root y escucha en el conocido puerto 22. Vamos a arreglarlo.
+
+El archivo que editaremos: `/etc/ssh/sshd_config`
+
+Después de hacer cambios, siempre reinicia el daemon SSH:
+
+```bash
+sudo systemctl restart sshd
+```
+
+<Callout type="warning">
+Mantén una sesión SSH activa mientras editas sshd_config. Si cometes un error y reinicias el daemon, puedes corregirlo desde la sesión existente sin quedarte bloqueado.
+</Callout>
+
+## Port
+
+```
+Port 2222
+```
+
+Cambiar el puerto por defecto del 22 a uno poco conocido no añade seguridad real, pero elimina el ruido de los bots automatizados que escanean constantemente el puerto 22. Tus logs serán mucho más limpios.
+
+## AddressFamily
+
+```
+AddressFamily inet
+```
+
+`inet` = solo IPv4. Usa `inet6` para solo IPv6, o `any` para ambos. Si no usas IPv6, bloquéalo a IPv4.
+
+## PermitRootLogin
+
+```
+PermitRootLogin no
+```
+
+**Crítico.** Nunca permitas el login directo como root por SSH. Conéctate como usuario normal y escala privilegios con `sudo` cuando sea necesario. Esto limita el impacto de cualquier compromiso.
+
+## PubkeyAuthentication
+
+```
+PubkeyAuthentication yes
+```
+
+Habilita la autenticación por clave. Esto debe estar activado si seguiste la parte 2 de esta serie.
+
+## AuthorizedKeysFile
+
+```
+AuthorizedKeysFile .ssh/authorized_keys
+```
+
+Ruta donde el servidor busca las claves públicas autorizadas. El valor por defecto está bien — solo asegúrate de que el archivo existe y tiene los permisos correctos (`chmod 600`).
+
+## PasswordAuthentication
+
+```
+PasswordAuthentication no
+```
+
+Una vez que tus claves funcionan, deshabilita la autenticación por contraseña completamente. Este es el paso de hardening más importante — hace que los ataques de fuerza bruta sean completamente inútiles.
+
+<Callout type="warning">
+Solo pongas esto en `no` después de verificar que la autenticación por clave funciona. De lo contrario te quedarás sin acceso.
+</Callout>
+
+## AllowUsers
+
+```
+AllowUsers b4rt deploy
+```
+
+Lista blanca de usuarios específicos que pueden conectarse por SSH. Cualquiera que no esté en esta lista es rechazado incluso con credenciales válidas.
+
+## AllowGroups
+
+```
+AllowGroups sshusers
+```
+
+Alternativa a `AllowUsers` — restringe el acceso a miembros de un grupo específico. Útil cuando tienes múltiples usuarios que gestionar.
+
+## PermitEmptyPasswords
+
+```
+PermitEmptyPasswords no
+```
+
+Nunca permitir que cuentas con contraseña vacía inicien sesión. Siempre debe ser `no`.
+
+## MaxAuthTries
+
+```
+MaxAuthTries 3
+```
+
+Máximo de intentos de autenticación por conexión. Después de 3 fallos se cierra la conexión. Reduce la efectividad de los ataques de fuerza bruta.
+
+## UsePAM
+
+```
+UsePAM no
+```
+
+Cuando usas autenticación por clave, PAM (Pluggable Authentication Modules) no es necesario. Deshabilitarlo simplifica el stack de autenticación.
+
+## X11Forwarding
+
+```
+X11Forwarding no
+```
+
+A menos que necesites redirigir aplicaciones GUI a través de SSH (raro en servidores), deshabilita esto. Es una superficie de ataque innecesaria.
+
+## UsePrivilegeSeparation
+
+```
+UsePrivilegeSeparation yes
+```
+
+Divide el daemon SSH en procesos privilegiados y no privilegiados. El proceso no privilegiado maneja el trabajo de cara a la red — si se ve comprometido, no tiene acceso root.
+
+## KexAlgorithms y Ciphers
+
+Para una configuración moderna y endurecida, restringe a algoritmos fuertes únicamente:
+
+```
+KexAlgorithms curve25519-sha256,diffie-hellman-group14-sha256
+Ciphers aes256-gcm@openssh.com,chacha20-poly1305@openssh.com
+MACs hmac-sha2-256,hmac-sha2-512
+```
+
+Esto deshabilita algoritmos más antiguos y débiles que aún están habilitados por defecto en muchas distribuciones.
+
+## Ejemplo de sshd_config endurecido
+
+```
+Port 2222
+AddressFamily inet
+PermitRootLogin no
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+PasswordAuthentication no
+PermitEmptyPasswords no
+AllowUsers b4rt
+MaxAuthTries 3
+UsePAM no
+X11Forwarding no
+UsePrivilegeSeparation yes
+KexAlgorithms curve25519-sha256,diffie-hellman-group14-sha256
+Ciphers aes256-gcm@openssh.com,chacha20-poly1305@openssh.com
+```
+
+Prueba la configuración antes de reiniciar:
+
+```bash
+sudo sshd -t
+```
+
+Si no hay errores, aplícala:
+
+```bash
+sudo systemctl restart sshd
+```
+
+Eso es todo para la serie SSH. Ya entiendes qué es SSH, cómo funciona la autenticación por clave y cómo asegurar el servidor en sí.

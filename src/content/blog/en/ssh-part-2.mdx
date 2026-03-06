@@ -1,0 +1,105 @@
+---
+title: "SSH: Public Key Authentication"
+slug: "ssh-part-2"
+description: "How SSH public key authentication works, how to generate ECDSA and RSA key pairs, and how to deploy them to your server securely."
+pubDate: 2019-03-13
+updatedDate: 2019-06-06
+category: "Security"
+tags: ["ssh", "linux", "security", "encryption", "keys", "servers"]
+featured: false
+author: "b4rt"
+lang: "en"
+translationKey: "ssh-part-2"
+series: "SSH"
+seriesOrder: 2
+---
+
+import Callout from '../../../components/ui/Callout.astro';
+
+In part 1 we covered what SSH is and how its encryption model works. Now let's get practical: password authentication is convenient but weak. Public key authentication is how you should actually be logging into servers.
+
+## Why not passwords?
+
+Passwords can be brute-forced, leaked, reused across services, or captured by malware on your local machine. A strong key pair eliminates all of these attack vectors — there's nothing to guess and nothing to leak from the server side.
+
+## Choosing an algorithm
+
+SSH supports several cryptographic algorithms for key generation. The main options:
+
+| Algorithm | Recommendation |
+|-----------|---------------|
+| RSA 4096  | Old standard, still acceptable but heavier |
+| ECDSA 521 | Modern, smaller keys, equivalent or better security |
+| DSA       | Deprecated — do not use |
+| Ed25519   | Best choice on modern systems |
+
+The math behind it: a 2048-bit RSA key provides roughly 112 bits of security. An ECDSA-521 key provides 260 bits of security with a far smaller key size and less bandwidth usage.
+
+**Use ECDSA-521 or Ed25519.**
+
+## Generating a key pair
+
+### ECDSA (recommended)
+
+```bash
+ssh-keygen -t ecdsa -b 521
+```
+
+With a custom path:
+
+```bash
+ssh-keygen -f ~/.ssh/key_ecdsa -t ecdsa -b 521
+```
+
+### RSA (if ECDSA isn't supported)
+
+```bash
+ssh-keygen -t rsa -b 4096
+```
+
+The command will ask where to save the key (default: `~/.ssh/id_ecdsa`) and prompt for a passphrase.
+
+<Callout type="warning">
+Always set a passphrase. If someone steals your private key file, the passphrase is the last line of defense. Without it, possession of the file equals full access to every server it's authorized on.
+</Callout>
+
+This generates two files:
+- `~/.ssh/id_ecdsa` — your **private key** (never share this)
+- `~/.ssh/id_ecdsa.pub` — your **public key** (copy this to servers)
+
+## Copying the public key to a server
+
+### Method 1: ssh-copy-id (easiest)
+
+```bash
+ssh-copy-id -i ~/.ssh/id_ecdsa.pub -p 22 user@192.168.1.5
+```
+
+Options:
+- `-i` — path to your public key
+- `-p` — SSH port on the remote server
+- `-f` — skip existing key check (use carefully)
+
+This appends your public key to `~/.ssh/authorized_keys` on the server.
+
+### Method 2: manual copy
+
+If `ssh-copy-id` isn't available:
+
+```bash
+cat ~/.ssh/id_ecdsa.pub | ssh user@192.168.1.5 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
+```
+
+## Verifying the setup
+
+After copying the key, test the connection:
+
+```bash
+ssh -i ~/.ssh/id_ecdsa user@192.168.1.5
+```
+
+If it connects without asking for a password (only the passphrase for your key), it's working correctly.
+
+## Next up
+
+In part 3 we'll lock down the SSH server itself — disabling root login, turning off password authentication, and hardening `sshd_config`.

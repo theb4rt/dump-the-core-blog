@@ -1,0 +1,105 @@
+---
+title: "SSH: Llaves públicas"
+slug: "ssh-part-2"
+description: "Cómo funciona la autenticación por clave pública en SSH, cómo generar pares de claves ECDSA y RSA, y cómo desplegarlas en tu servidor de forma segura."
+pubDate: 2019-03-13
+updatedDate: 2019-06-06
+category: "Security"
+tags: ["ssh", "linux", "seguridad", "cifrado", "llaves", "servidores"]
+featured: false
+author: "b4rt"
+lang: "es"
+translationKey: "ssh-part-2"
+series: "SSH"
+seriesOrder: 2
+---
+
+import Callout from '../../../components/ui/Callout.astro';
+
+En la parte 1 vimos qué es SSH y cómo funciona su modelo de cifrado. Ahora vamos a lo práctico: la autenticación por contraseña es cómoda pero débil. La autenticación por clave pública es como deberías conectarte a tus servidores.
+
+## ¿Por qué no usar contraseñas?
+
+Las contraseñas pueden ser atacadas por fuerza bruta, filtradas, reutilizadas en otros servicios, o capturadas por malware en tu máquina local. Un par de claves fuerte elimina todos estos vectores de ataque — no hay nada que adivinar y nada que filtrar del lado del servidor.
+
+## Eligiendo un algoritmo
+
+SSH soporta varios algoritmos criptográficos para la generación de claves. Las principales opciones:
+
+| Algoritmo | Recomendación |
+|-----------|--------------|
+| RSA 4096  | Estándar antiguo, aceptable pero más pesado |
+| ECDSA 521 | Moderno, claves más pequeñas, seguridad equivalente o mejor |
+| DSA       | Obsoleto — no usar |
+| Ed25519   | La mejor opción en sistemas modernos |
+
+La matemática detrás de esto: una clave RSA de 2048 bits proporciona aproximadamente 112 bits de seguridad. Una clave ECDSA-521 proporciona 260 bits de seguridad con un tamaño de clave mucho menor y menos uso de ancho de banda.
+
+**Usa ECDSA-521 o Ed25519.**
+
+## Generando un par de claves
+
+### ECDSA (recomendado)
+
+```bash
+ssh-keygen -t ecdsa -b 521
+```
+
+Con una ruta personalizada:
+
+```bash
+ssh-keygen -f ~/.ssh/key_ecdsa -t ecdsa -b 521
+```
+
+### RSA (si ECDSA no está soportado)
+
+```bash
+ssh-keygen -t rsa -b 4096
+```
+
+El comando preguntará dónde guardar la clave (por defecto: `~/.ssh/id_ecdsa`) y pedirá una frase de contraseña.
+
+<Callout type="warning">
+Siempre establece una frase de contraseña (passphrase). Si alguien roba tu archivo de clave privada, la frase de contraseña es la última línea de defensa. Sin ella, tener el archivo equivale a tener acceso total a todos los servidores donde está autorizada.
+</Callout>
+
+Esto genera dos archivos:
+- `~/.ssh/id_ecdsa` — tu **clave privada** (nunca la compartas)
+- `~/.ssh/id_ecdsa.pub` — tu **clave pública** (cópiala a los servidores)
+
+## Copiando la clave pública al servidor
+
+### Método 1: ssh-copy-id (más fácil)
+
+```bash
+ssh-copy-id -i ~/.ssh/id_ecdsa.pub -p 22 user@192.168.1.5
+```
+
+Opciones:
+- `-i` — ruta a tu clave pública
+- `-p` — puerto SSH en el servidor remoto
+- `-f` — omitir verificación de clave existente (usar con cuidado)
+
+Esto añade tu clave pública al archivo `~/.ssh/authorized_keys` en el servidor.
+
+### Método 2: copia manual
+
+Si `ssh-copy-id` no está disponible:
+
+```bash
+cat ~/.ssh/id_ecdsa.pub | ssh user@192.168.1.5 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
+```
+
+## Verificando la configuración
+
+Después de copiar la clave, prueba la conexión:
+
+```bash
+ssh -i ~/.ssh/id_ecdsa user@192.168.1.5
+```
+
+Si se conecta sin pedir contraseña (solo la frase de contraseña de tu clave), está funcionando correctamente.
+
+## Próxima parte
+
+En la parte 3 aseguraremos el servidor SSH en sí — deshabilitando el login como root, desactivando la autenticación por contraseña y endureciendo el `sshd_config`.

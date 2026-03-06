@@ -1,0 +1,120 @@
+---
+title: "Mi problema con Arch Linux"
+slug: "my-problem-with-arch-linux"
+description: "Cómo arreglé un GRUB roto en un disco Arch Linux completamente cifrado después de un cambio de configuración erróneo."
+pubDate: 2023-05-05
+category: "Linux"
+tags: ["arch", "linux", "grub", "luks", "boot", "encrypted", "repair", "mount"]
+featured: false
+author: "b4rt"
+lang: "es"
+translationKey: "my-problem-with-arch-linux"
+coverImage: "/images/posts/arch-linux.jpg"
+---
+
+import Callout from '../../../components/ui/Callout.astro';
+
+La semana pasada tuve un problema con mi instalación de Arch Linux. Llevo más de 4 años usando Arch y debo decir que es la distribución más estable que he usado en más de 14 años. Sin embargo, cometí el error de modificar la configuración de Grub (te odio Nvidia, te odio).
+
+Tengo una instalación bastante especial de Arch Linux con el disco completamente cifrado sobre GPT, lo que causó uno de los problemas. Primero, después de modificar la configuración de Grub, la guardé, la actualicé y reinicié el PC (al menos había guardado una copia de seguridad de mi antigua configuración de Grub). Tras eso, solo tuve un bucle infinito de reinicios.
+
+Normalmente aparecería un mensaje para descifrar el disco y luego se mostraría Grub. Sin embargo, después de mis cambios, tras introducir la contraseña de descifrado, Grub simplemente crasheaba y el PC empezaba a reiniciarse.
+
+## El proceso de recuperación
+
+Arranqué desde un Live CD de Arch Linux y seguí estos pasos para recuperar el sistema.
+
+### Paso 1 — Identificar las particiones
+
+```bash
+lsblk
+```
+
+Esto muestra todas las unidades y particiones. Identifica cuál es tu partición cifrada (en mi caso `/dev/sda1`).
+
+### Paso 2 — Descifrar la partición
+
+```bash
+cryptsetup luksOpen /dev/sda1 cryptdiskb4rt
+```
+
+Introduce tu contraseña de LUKS. Esto crea un dispositivo de bloque mapeado en `/dev/mapper/cryptdiskb4rt`.
+
+### Paso 3 — Detectar el grupo de volúmenes LVM
+
+```bash
+vgscan
+```
+
+### Paso 4 — Activar los volúmenes lógicos
+
+```bash
+vgchange -ay
+```
+
+### Paso 5 — Listar los volúmenes lógicos
+
+```bash
+lvscan
+```
+
+Identifica los puntos de montaje — busca el volumen root (`/`).
+
+### Paso 6 — Montar el sistema de archivos root
+
+```bash
+mount /dev/vg/root /mnt
+```
+
+### Paso 7 — Vincular los directorios del sistema
+
+```bash
+mount --bind /dev /mnt/dev
+mount --bind /sys /mnt/sys
+mount --bind /proc /mnt/proc
+```
+
+Estos son necesarios para que chroot funcione correctamente.
+
+### Paso 8 — Entrar en chroot
+
+```bash
+chroot /mnt /bin/bash
+```
+
+Ahora estás operando dentro de tu instalación de Arch como si hubiera arrancado normalmente.
+
+### Paso 9 — Reinstalar GRUB
+
+```bash
+grub-install /dev/sda
+```
+
+<Callout type="warning">
+Instala GRUB en el disco, no en la partición. `/dev/sda`, no `/dev/sda1`.
+</Callout>
+
+### Paso 10 — Restaurar la configuración
+
+Edita `/etc/default/grub` y revierte los cambios que causaron el problema. En mi caso, había añadido parámetros del kernel para Nvidia que rompieron el proceso de arranque del cifrado.
+
+### Paso 11 — Regenerar la configuración de GRUB
+
+```bash
+grub-mkconfig -o /boot/grub/grub.cfg
+```
+
+### Paso 12 — Salir y reiniciar
+
+```bash
+exit
+reboot
+```
+
+## Lección aprendida
+
+No edites la configuración de GRUB a menos que estés completamente seguro de lo que estás cambiando. Si debes hacerlo, guarda siempre una copia de seguridad antes, y ten un Live CD a mano por si algo sale mal.
+
+El cifrado completo del disco añade una capa extra de complejidad al proceso de recuperación — la partición debe descifrarse antes de que puedas montarla, y LVM necesita activarse antes de que los volúmenes sean accesibles.
+
+Una vez que entiendes los pasos, la recuperación es sencilla. El bucle de reinicio se veía aterrador, pero la instalación estaba completamente intacta.

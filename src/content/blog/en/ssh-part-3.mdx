@@ -1,0 +1,184 @@
+---
+title: "Configuring the SSH Server"
+slug: "ssh-part-3"
+description: "A practical guide to hardening sshd_config: disable root login, enforce key-only auth, restrict users, and tune the most important SSH server settings."
+pubDate: 2019-03-13
+updatedDate: 2019-06-06
+category: "Security"
+tags: ["ssh", "linux", "security", "servers", "hardening", "sshd"]
+featured: false
+author: "b4rt"
+lang: "en"
+translationKey: "ssh-part-3"
+series: "SSH"
+seriesOrder: 3
+---
+
+import Callout from '../../../components/ui/Callout.astro';
+
+We covered what SSH is and how key pairs work. Now let's configure the server itself. A default SSH installation is functional but not hardened — it accepts password logins, allows root access, and listens on the well-known port 22. Let's fix that.
+
+The file we'll be editing: `/etc/ssh/sshd_config`
+
+After making changes, always restart the SSH daemon:
+
+```bash
+sudo systemctl restart sshd
+```
+
+<Callout type="warning">
+Keep an active SSH session open while editing sshd_config. If you make a mistake and restart the daemon, you can fix it from the existing session without getting locked out.
+</Callout>
+
+## Port
+
+```
+Port 2222
+```
+
+Changing the default port from 22 doesn't add real security, but it eliminates noise from automated bots that constantly scan port 22. Your logs will be dramatically cleaner.
+
+## AddressFamily
+
+```
+AddressFamily inet
+```
+
+`inet` = IPv4 only. Use `inet6` for IPv6 only, or `any` for both. If you're not using IPv6, lock it to IPv4.
+
+## PermitRootLogin
+
+```
+PermitRootLogin no
+```
+
+**Critical.** Never allow direct root login over SSH. Log in as a regular user and escalate with `sudo` when needed. This limits the blast radius of any compromise.
+
+## PubkeyAuthentication
+
+```
+PubkeyAuthentication yes
+```
+
+Enables key-based authentication. This needs to be on if you followed part 2 of this series.
+
+## AuthorizedKeysFile
+
+```
+AuthorizedKeysFile .ssh/authorized_keys
+```
+
+Path where the server looks for authorized public keys. The default is fine — just make sure the file exists and has correct permissions (`chmod 600`).
+
+## PasswordAuthentication
+
+```
+PasswordAuthentication no
+```
+
+Once your keys are working, disable password authentication entirely. This is the most important hardening step — it makes brute force attacks completely pointless.
+
+<Callout type="warning">
+Only set this to `no` after you've verified key authentication works. Otherwise you'll lock yourself out.
+</Callout>
+
+## AllowUsers
+
+```
+AllowUsers b4rt deploy
+```
+
+Whitelist specific users allowed to log in via SSH. Anyone not on this list is rejected even with valid credentials.
+
+## AllowGroups
+
+```
+AllowGroups sshusers
+```
+
+Alternative to `AllowUsers` — restrict access to members of a specific group. Useful when you have multiple users to manage.
+
+## PermitEmptyPasswords
+
+```
+PermitEmptyPasswords no
+```
+
+Never allow accounts with empty passwords to log in. Should always be `no`.
+
+## MaxAuthTries
+
+```
+MaxAuthTries 3
+```
+
+Maximum authentication attempts per connection. After 3 failures the connection is dropped. Reduces effectiveness of brute force attacks.
+
+## UsePAM
+
+```
+UsePAM no
+```
+
+When using key-based authentication, PAM (Pluggable Authentication Modules) isn't needed. Disable it to simplify the authentication stack.
+
+## X11Forwarding
+
+```
+X11Forwarding no
+```
+
+Unless you need to forward GUI applications over SSH (rare on servers), disable this. It's an unnecessary attack surface.
+
+## UsePrivilegeSeparation
+
+```
+UsePrivilegeSeparation yes
+```
+
+Splits the SSH daemon into privileged and unprivileged processes. The unprivileged process handles the network-facing work — if it's compromised, it doesn't have root access.
+
+## KexAlgorithms and Ciphers
+
+For a modern hardened setup, restrict to strong algorithms only:
+
+```
+KexAlgorithms curve25519-sha256,diffie-hellman-group14-sha256
+Ciphers aes256-gcm@openssh.com,chacha20-poly1305@openssh.com
+MACs hmac-sha2-256,hmac-sha2-512
+```
+
+This disables older, weaker algorithms that are still enabled by default in many distributions.
+
+## Final hardened sshd_config example
+
+```
+Port 2222
+AddressFamily inet
+PermitRootLogin no
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+PasswordAuthentication no
+PermitEmptyPasswords no
+AllowUsers b4rt
+MaxAuthTries 3
+UsePAM no
+X11Forwarding no
+UsePrivilegeSeparation yes
+KexAlgorithms curve25519-sha256,diffie-hellman-group14-sha256
+Ciphers aes256-gcm@openssh.com,chacha20-poly1305@openssh.com
+```
+
+Test the config before restarting:
+
+```bash
+sudo sshd -t
+```
+
+If no errors, apply it:
+
+```bash
+sudo systemctl restart sshd
+```
+
+That's the SSH series. You now understand what SSH is, how key authentication works, and how to lock down the server itself.

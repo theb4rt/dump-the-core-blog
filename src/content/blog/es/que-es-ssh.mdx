@@ -1,0 +1,69 @@
+---
+title: "¿Qué es SSH?"
+slug: "ssh-part-1"
+description: "Una introducción a SSH: qué es, cómo funciona el cifrado y por qué reemplazó a Telnet como estándar para la gestión remota de servidores."
+pubDate: 2019-04-09
+updatedDate: 2019-06-06
+category: "Security"
+tags: ["ssh", "linux", "seguridad", "cifrado", "servidores", "redes"]
+featured: false
+author: "b4rt"
+lang: "es"
+translationKey: "ssh-part-1"
+series: "SSH"
+seriesOrder: 1
+---
+
+import Callout from '../../../components/ui/Callout.astro';
+
+Hace años vi Matrix por primera vez. Hay una escena donde Trinity se sienta frente a una terminal, escribe unos comandos y entra a una red eléctrica. No tenía idea de lo que estaba pasando — solo letras verdes en una pantalla negra. Lo que no sabía en ese momento era que estaba usando Nmap y SSH. Herramientas reales. Con un protocolo real.
+
+De eso vamos a hablar hoy.
+
+## ¿Qué es SSH?
+
+**SSH (Secure Shell)** es un protocolo de conexión remota para gestionar máquinas a través de una red. Te permite transferir datos y ejecutar comandos en un servidor remoto como si estuvieras físicamente frente a él.
+
+Antes de SSH, el estándar era **Telnet**. Telnet funcionaba, pero tenía un problema crítico: transmitía todo en texto plano. Contraseñas, comandos, contenido de archivos — todo visible para cualquiera que estuviera capturando el tráfico de red. SSH fue creado para resolver exactamente eso.
+
+La diferencia clave:
+
+| Protocolo | Cifrado | Puerto por defecto |
+|-----------|---------|-------------------|
+| Telnet    | Ninguno (texto plano) | 23 |
+| SSH       | Sí (simétrico + asimétrico) | 22 |
+
+## Cómo funciona el cifrado en SSH
+
+SSH usa dos tipos de cifrado de forma combinada:
+
+El **cifrado asimétrico** se usa durante el handshake inicial para intercambiar de forma segura una clave de sesión. Esto implica un par de claves pública/privada — la clave pública puede compartirse libremente, la clave privada nunca sale de tu máquina.
+
+El **cifrado simétrico** se encarga de los datos de la sesión. Una vez que ambas partes acordaron una clave de sesión compartida (a través del handshake asimétrico), todo el tráfico se cifra con esa clave. El cifrado simétrico es más rápido y eficiente para la transferencia masiva de datos.
+
+<Callout type="info">
+Piensa en el cifrado asimétrico como el apretón de manos que establece la confianza, y en el simétrico como el canal seguro que sigue.
+</Callout>
+
+## Tunneling SSH
+
+Una característica poderosa y poco aprovechada de SSH es el **tunneling** — la capacidad de enrutar otro tráfico de red a través de una conexión SSH cifrada.
+
+Usos prácticos:
+
+**Saltarse firewalls corporativos** — Redirige un puerto local a través de SSH para acceder a servicios bloqueados por las políticas de red.
+
+**Acceso remoto a bases de datos** — Herramientas como pgAdmin o phpMyAdmin normalmente requieren que la base de datos sea accesible en la red. Con el tunneling SSH, puedes conectarte a una instancia remota de PostgreSQL o MySQL a través de un puerto local, manteniendo la base de datos completamente aislada de internet.
+
+```bash
+# Redirigir el puerto local 5433 al puerto remoto de PostgreSQL
+ssh -L 5433:localhost:5432 user@tu-servidor.com
+```
+
+Después de ejecutar esto, puedes apuntar pgAdmin a `localhost:5433` y se conecta de forma segura a través del túnel.
+
+**El concepto:** SSH hace que un puerto remoto parezca estar ejecutándose localmente. La conexión está cifrada de extremo a extremo, y la base de datos nunca necesita estar expuesta a internet.
+
+## Próxima parte
+
+En la parte 2 veremos la autenticación por clave pública — cómo generar pares de claves, copiarlas al servidor, y por qué nunca deberías depender solo de contraseñas.
