@@ -3,8 +3,8 @@ import { glob } from 'astro/loaders';
 
 const postSchema = () =>
   z.object({
-    title: z.string().max(60),
-    description: z.string().max(160),
+    title: z.string().max(120),
+    description: z.string().max(300),
     pubDate: z.coerce.date(),
     updatedDate: z.coerce.date().optional(),
     category: z.string().optional(),

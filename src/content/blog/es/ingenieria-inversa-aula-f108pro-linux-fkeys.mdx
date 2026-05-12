@@ -1,0 +1,850 @@
+---
+title: "Ingeniería inversa a mi teclado Aula F108Pro en Linux para arreglar las F-eys"
+description: "Las teclas F1–F12 de mi Aula F108Pro no funcionaban bien en Linux. Revisé el journal de Arch y terminé haciendo ingeniería inversa con esos logs para entender HID descriptors, hid-apple, XKB, Wayland, X11 y todo el lío detrás de esas teclas."
+pubDate: 2026-05-12
+category: "Linux"
+tags: ["arch", "linux", "keyboard", "aula", "f108pro", "hid", "hid-apple", "fnmode", "xkb", "gnome", "wayland"]
+featured: false
+author: "b4rt"
+slug: "fix-aula-f108pro-fkeys-linux"
+lang: "es"
+translationKey: "fix-aula-f108pro-fkeys-linux"
+coverImage: "/images/posts/fix-aula-f108pro-fkeys-linux.webp"
+---
+
+import Callout from '../../../components/ui/Callout.astro';
+
+Mi teclado Aula F108Pro funcionaba bien en Linux... hasta que un día dejaron de funcionar las teclas `F1`, `F2`, `F3` y toda la fila F1–F12.
+
+Antes de entrar al problema, contexto rápido: después de haber probado varios teclados mecánicos, este Aula F108Pro sigue siendo de mis favoritos incluso después de más de un año de uso. Me gusta el feeling, el sonido, la construcción, la rueda, la pantallita y ese aire medio exagerado de teclado gamer que parece traer más firmware que sentido común.
+
+<video src="/videos/posts/fix-aula-f108pro-fkeys-linux.mp4" autoplay loop muted playsinline controls />
+
+Al inicio pensé que era GNOME haciendo de las suyas, alguna extensión rota, Wayland siendo Wayland xD, o simplemente Linux recordándome que la paz nunca fue una opción. Pero no. El problema era algo más profundo.
+
+Revisé el journal de Arch y terminé haciendo ingeniería inversa con esos logs para entender qué carajo estaba pasando: HID descriptors, `hid-apple`, XKB, Wayland, X11 y toda la novela detrás de esas teclas.
+
+Spoiler: mi teclado se estaba presentando ante Linux como si fuera un Apple Wireless Keyboard. Entonces el kernel cargaba el driver `hid-apple`, que tiene lógica especial para `Fn`, F-keys y media keys.
+
+Pero la parte interesante no era solo “cambiar un parámetro y listo”. Algunas interfaces del teclado eran detectadas como clon y el driver desactivaba parte del manejo especial de `Fn`; además, el firmware del propio teclado también manejaba su lógica interna.
+
+Básicamente, mi teclado no era Apple, pero Linux lo estaba tratando como si viniera con manzanita.
+
+---
+
+## El problema
+
+El problema real era simple:
+
+- Las teclas `F1`–`F12` dejaron de funcionar como debían.
+- El teclado aparecía en los logs como `F108Pro Dongle`.
+- Linux lo detectaba con Vendor ID de Apple.
+- El kernel cargaba `hid-apple` en vez de tratarlo como un teclado HID genérico.
+- Algunas interfaces mostraban el warning de `Fn key not found`, lo que indicaba que el driver desactivaba el manejo especial de `Fn` para esas interfaces.
+- Pero la interfaz principal no necesariamente mostraba ese warning, así que `fnmode` podía seguir siendo relevante en parte del dispositivo.
+- El resultado: la fila de teclas F parecía un problema simple, pero la historia era más fina: `hid-apple`, `fnmode`, initramfs y el firmware del teclado estaban metidos en el medio.
+
+Y claro, lo primero fue mirar qué decía el sistema.
+
+Porque en Linux, cuando algo se rompe, el primer sospechoso no siempre es el hardware. A veces el culpable está escondido en un log, riéndose de ti en hexadecimal.
+
+---
+
+## Lo que decía el journal
+
+Cada vez que el dongle se conectaba — al bootear, después de un reset USB o al reconectarlo — el kernel imprimía algo como esto:
+
+```text
+kernel: usb 1-6.4.1: Product: F108Pro Dongle
+kernel: apple 0003:05AC:024F.0003: input,hidraw4: USB HID v1.00 Keyboard [F108Pro Dongle] on usb-0000:00:14.0-6.4.1/input0
+kernel: apple 0003:05AC:024F.0004: Fn key not found (Apple Wireless Keyboard clone?), disabling Fn key handling
+kernel: apple 0003:05AC:024F.0004: input,hidraw5: USB HID v1.00 Mouse [F108Pro Dongle] on usb-0000:00:14.0-6.4.1/input1
+kernel: apple 0003:05AC:024F.0005: Fn key not found (Apple Wireless Keyboard clone?), disabling Fn key handling
+kernel: apple 0003:05AC:024F.0005: input,hiddev100,hidraw6: USB HID v1.00 Keyboard [F108Pro Dongle] on usb-0000:00:14.0-6.4.1/input2
+kernel: apple 0003:05AC:024F.0006: hiddev101,hidraw7: USB HID v1.00 Device [F108Pro Dongle] on usb-0000:00:14.0-6.4.1/input3
+kernel: apple 0003:05AC:024F.0007: hiddev102,hidraw8: USB HID v1.00 Device [F108Pro Dongle] on usb-0000:00:14.0-6.4.1/input4
+```
+
+La línea clave era esta:
+
+```text
+apple 0003:05AC:024F.0004: Fn key not found (Apple Wireless Keyboard clone?), disabling Fn key handling
+```
+
+Esto huele peor que el Rímac.
+
+El kernel estaba usando el driver `apple`, o sea `hid-apple`, para manejar mi teclado. Y encima el propio kernel decía: “esto parece un clon de Apple Wireless Keyboard”.
+
+Gracias, Linux. Raro, pero útil.
+
+Pero había otro detalle importante: la interfaz `.0003`, que parece ser la principal del teclado, no mostraba ese warning. Los warnings aparecían en `.0004` y `.0005`.
+
+Eso significa que el comportamiento real no se podía explicar con una frase simple tipo:
+
+```text
+hid-apple detectó el clon y desactivó todo.
+```
+
+No. Era más sucio.
+
+Algunas interfaces parecían tener el manejo especial de `Fn` desactivado, pero en la interfaz principal `fnmode` todavía podía tener algún efecto. Y encima el firmware del teclado también podía estar mandando códigos ya procesados antes de que Linux metiera mano.
+
+Linux, periféricos chinos y compatibilidad Apple falsa. Qué podría salir mal.
+
+---
+
+## Destripando `0003:05AC:024F.0003`
+
+Esta parte del log parece basura hexadecimal hasta que la separas:
+
+```text
+0003:05AC:024F.0003
+```
+
+| Field | Value | Meaning |
+|---|---|---|
+| Bus type | `0003` | USB (`0005` sería Bluetooth, `0019` virtual) |
+| Vendor ID | `05AC` | Apple, Inc. |
+| Product ID | `024F` | Apple Wireless Keyboard |
+| Instance | `.0003` | La enésima interfaz HID enumerada en este arranque |
+
+El detalle importante es este:
+
+```text
+05AC:024F
+```
+
+`05AC` es Apple.
+
+Sí. Mi Aula F108Pro se estaba presentando como un teclado de Apple.
+
+No porque sea Apple, obviamente, sino porque algunos teclados clónicos usan IDs y descriptores compatibles con Apple para que los sistemas operativos los reconozcan sin tanto drama.
+
+Es básicamente el equivalente USB de ponerse una camiseta de Apple y decir: “tranqui bro, soy compatible”.
+
+---
+
+## Por qué Linux carga `hid-apple`
+
+Como el dispositivo se anuncia con Vendor ID de Apple, el kernel no lo maneja como un simple `hid-generic`. En su lugar carga:
+
+```text
+hid-apple
+```
+
+Ese driver existe porque los teclados Apple tienen comportamientos especiales. El más importante para este caso: cómo manejan la tecla `Fn`, las F-keys y las media keys.
+
+En muchos teclados Apple, la fila superior puede comportarse como:
+
+- Brillo
+- Volumen
+- Play/pause
+- Mission Control
+- Media keys
+- O como `F1`–`F12`, dependiendo de `Fn`
+
+Eso está bien para un teclado Apple real.
+
+Pero mi teclado no era Apple.
+
+Era un Aula F108Pro con bigote falso, modo Cosme Fulanito: “no soy Apple, lo juro”.
+
+---
+
+## El mensaje "Fn key not found"
+
+El log más importante es este:
+
+```text
+Fn key not found (Apple Wireless Keyboard clone?), disabling Fn key handling
+```
+
+Lo que está pasando es esto:
+
+1. El teclado dice: “soy Apple”.
+2. Linux carga `hid-apple`.
+3. `hid-apple` busca la tecla `Fn` especial de Apple en el HID report descriptor.
+4. En algunas interfaces no la encuentra.
+5. Entonces concluye: “esto parece un clon”.
+6. Desactiva parte del manejo especial de `Fn` para esa interfaz.
+
+Y esa parte tiene todo el sentido del mundo.
+
+El driver básicamente está diciendo:
+
+```text
+Este dispositivo se hace pasar por Apple, pero no tiene la tecla Fn como Apple en esta interfaz.
+Mejor no aplico toda la basura rara de Apple porque puedo romper más cosas.
+```
+
+
+Lo gracioso es que ese warning parece un problema, pero también es el kernel intentando salvarte de una configuración peor.
+
+Aquí fue donde inicialmente me fui por el camino fácil: pensé que todo se reducía a `fnmode`.
+
+Pero no.
+
+Ese mensaje significa algo más específico: `hid-apple` sí está cargado, pero en las interfaces donde aparece ese warning el driver apagó el quirk de `Fn`. En cristiano: el teclado sigue usando el driver `hid-apple`, pero la lógica especial que hace el swap entre F-keys y media keys puede no aplicarse en esas interfaces.
+
+La parte que lo vuelve más interesante es que no todas las interfaces mostraban ese warning. La `.0003`, que parece ser la interfaz principal del teclado, no lo mostraba. Así que `fnmode` podía seguir teniendo efecto en parte del dispositivo, o podía ser decorativo dependiendo de qué códigos estuviera enviando realmente el firmware del teclado.
+
+Así que `fnmode` existe, sí. Pero no puedes asumir automáticamente que controla todo el comportamiento de este teclado.
+
+---
+
+## El parámetro `fnmode`
+
+El driver `hid-apple` tiene un parámetro global llamado `fnmode`:
+
+```text
+/sys/module/hid_apple/parameters/fnmode
+```
+
+![/sys/module/hid_apple/parameters/fnmode devolviendo 2](/images/posts/fix-aula-f108pro-fkeys-linux-fnmode-value.webp)
+
+Ese parámetro controla cómo se comportan las F-keys y las media keys en teclados Apple que sí tienen el manejo especial de `Fn` activo.
+
+| Valor | Nombre | Qué hace |
+|---|---|---|
+| `0` | disabled | Sin manejo especial de Fn. F-keys salen tal cual. |
+| `1` | fkeyslast | F-keys por defecto, media keys con `Fn` |
+| `2` | fkeysfirst | Media keys por defecto, F-keys con `Fn` |
+
+En un teclado Apple real, esto sí importa.
+
+
+Y ese fue justamente el valor que terminé dejando configurado:
+
+```text
+options hid_apple fnmode=2
+```
+
+Pero mi Aula F108Pro no es un teclado Apple real.
+
+La tecla `Fn` existe físicamente, claro, pero en muchos teclados mecánicos la maneja el firmware del propio teclado. A veces no viaja por USB como una tecla normal. El firmware decide qué código HID mandar:
+
+```text
+Presionas F1      → el teclado manda el código HID de F1 o de una media key
+Presionas Fn+F1   → el firmware decide mandar el código alternativo
+```
+
+Entonces pueden pasar dos cosas:
+
+1. `fnmode=2` sí afecta una interfaz donde `hid-apple` mantiene activo el manejo de Fn.
+2. O el firmware del teclado ya manda los códigos finales, y `fnmode` queda casi como decoración.
+
+En mi caso, los logs apuntaban a una mezcla rara:
+
+- `hid-apple` sí estaba cargado.
+- Algunas interfaces mostraban `Fn key not found`, así que ahí se desactivaba el manejo especial de `Fn`.
+- La interfaz `.0003` no mostraba ese warning, así que no podía descartar que `fnmode=2` siguiera afectando algo ahí.
+- El firmware del Aula F108Pro probablemente también manejaba parte de la lógica internamente.
+
+La versión correcta es más fea, pero más honesta:
+
+```text
+fnmode=2 quedó configurado globalmente para hid-apple,
+pero el comportamiento final de F1–F12 depende de qué interfaz conserva el quirk de Fn
+y de qué códigos HID decide mandar el firmware del teclado.
+```
+
+Linux no te da una respuesta simple porque aparentemente eso sería demasiado amable.
+
+---
+
+## La corrección real que apliqué
+
+El parche que apliqué fue este:
+
+```bash
+echo 'options hid_apple fnmode=2' | sudo tee /etc/modprobe.d/hid_apple.conf
+sudo mkinitcpio -P
+sudo reboot
+```
+
+![Contenido de /etc/modprobe.d/hid_apple.conf tras aplicar el fix](/images/posts/fix-aula-f108pro-fkeys-linux-hid-apple-conf-2.webp)
+
+Eso fue el fix práctico.
+
+Pero la parte importante no es solo el `fnmode=2`.
+
+La parte importante es que corrí:
+
+```bash
+sudo mkinitcpio -P
+```
+
+Porque en mi sistema `hid_apple` puede cargarse muy temprano, dentro del initramfs.
+
+Y si el módulo se carga dentro del initramfs, pero tu configuración está solo en el filesystem real, entonces llegas tarde. El módulo ya arrancó con sus defaults antes de que tu `/etc/modprobe.d/hid_apple.conf` exista para ese boot.
+
+El Linux equivalent de llegar con el extintor cuando ya se quemó la cocina.
+
+---
+
+## Por qué `mkinitcpio -P` importaba en mi caso
+
+Mi `mkinitcpio.conf` tiene hooks como estos:
+
+```text
+HOOKS=(base systemd autodetect microcode modconf keyboard keymap sd-vconsole block sd-encrypt filesystems fsck)
+```
+
+El hook clave es:
+
+```text
+modconf
+```
+
+Ese hook copia los archivos de:
+
+```text
+/etc/modprobe.d/
+```
+
+dentro del initramfs.
+
+Y eso importa porque también tengo LUKS encryption.
+
+La secuencia de boot se ve más o menos así:
+
+```text
+initramfs carga
+hid_apple puede cargarse ahí
+el teclado tiene que funcionar para escribir la passphrase de LUKS
+recién después se desbloquea root
+recién después entra el sistema real
+```
+
+Entonces, si `hid_apple` se carga antes de desbloquear el disco, necesita leer su configuración antes de que exista el root real.
+
+Por eso no bastaba con crear:
+
+```text
+/etc/modprobe.d/hid_apple.conf
+```
+
+
+También había que reconstruir el initramfs:
+
+```bash
+sudo mkinitcpio -P
+```
+
+Así esa configuración queda metida dentro de la imagen de arranque.
+
+En mi caso, esa parte era crítica porque uso LUKS. Si el teclado se comporta raro antes de desbloquear el disco, no sirve de mucho que el sistema real tenga la configuración correcta después.
+
+Muy bonito tu fix, pero si llega después de la contraseña, ya valiste.
+
+---
+
+## Confirmando que el teclado sigue siendo el mismo bicho raro
+
+Después de todo esto, el teclado puede seguir apareciendo como `Apple Wireless Keyboard clone`.
+
+Eso no necesariamente significa que esté mal.
+
+El dispositivo sigue anunciándose con el mismo Vendor ID y Product ID:
+
+```text
+05AC:024F
+```
+
+Así que Linux puede seguir cargando `hid-apple`.
+
+La diferencia importante es esta:
+
+```text
+hid-apple está atado al dispositivo,
+fnmode=2 queda configurado globalmente,
+pero algunas interfaces pueden tener el manejo Fn desactivado por detección de clon.
+```
+
+No basta con decir:
+
+```text
+hid-apple está cargado, entonces fnmode manda.
+```
+
+Lo correcto es:
+
+```text
+hid-apple está cargado,
+fnmode existe como valor global,
+pero cada interfaz puede tener quirks distintos
+y el firmware del teclado también puede decidir qué códigos HID manda.
+```
+
+Y eso explica por qué el teclado puede funcionar aunque la explicación no sea tan limpia como “puse `fnmode=2` y magia”.
+
+Hermoso caos.
+
+---
+
+## Cómo verificar si `fnmode` realmente afecta tu teclado
+
+Puedes probar en runtime, sin cambiar tu configuración persistente:
+
+```bash
+echo 0 | sudo tee /sys/module/hid_apple/parameters/fnmode
+```
+
+Luego prueba `F1`, `F2`, `F3`, etc.
+
+Para volver al valor que yo dejé configurado:
+
+```bash
+echo 2 | sudo tee /sys/module/hid_apple/parameters/fnmode
+```
+
+Si el comportamiento de las F1–F12 cambia al mover `fnmode`, entonces `hid-apple` sí está afectando esa interfaz.
+
+Si no cambia nada, entonces probablemente el firmware del teclado está mandando directamente los códigos correctos y `fnmode` es decoración bonita en `/sys`.
+
+Ese cambio es temporal. No sobrevive reinicios.
+
+El valor persistente sigue saliendo de:
+
+```text
+/etc/modprobe.d/hid_apple.conf
+```
+
+y, si aplica temprano en boot, de lo que quedó copiado dentro del initramfs después de:
+
+```bash
+sudo mkinitcpio -P
+```
+
+---
+
+## Un solo teclado, cinco interfaces HID
+
+Otra cosa interesante del journal: el Aula/F108Pro no aparece como un único dispositivo simple.
+
+Aparece como varias interfaces HID:
+
+| Interface | Kernel name | Role |
+|---|---|---|
+| `input0` | `hidraw4`, Keyboard | Teclado principal: letras, números, modifiers |
+| `input1` | `hidraw5`, Mouse | Interfaz tipo mouse, usada por algunas funciones raras |
+| `input2` | `hidraw6`, Keyboard + `hiddev100` | Segunda interfaz de teclado: media keys, brillo o consumer controls |
+| `input3` | `hidraw7`, Device + `hiddev101` | Interfaz vendor-specific: configuración, macros, RGB, VIA/QMK o software del fabricante |
+| `input4` | `hidraw8`, Device + `hiddev102` | Otra interfaz vendor-specific: firmware update, RGB o almacenamiento de macros |
+
+O sea, conectas “un teclado” y Linux ve medio zoológico:
+
+```text
+hidraw4
+hidraw5
+hidraw6
+hidraw7
+hidraw8
+hiddev100
+hiddev101
+hiddev102
+/dev/input/eventN
+```
+
+Esto no es necesariamente malo. Los periféricos modernos suelen funcionar así.
+
+Tu teclado no es solo un teclado. También puede exponer controles multimedia, macros, RGB, modo configuración, firmware update y quién sabe qué otra porquería metió el fabricante.
+
+Linux solo está mostrando todas las capas.
+
+---
+
+## Por qué aparece como mouse
+
+En los logs también aparece esto:
+
+```text
+USB HID v1.00 Mouse [F108Pro Dongle]
+```
+
+No, tu teclado no se volvió mouse.
+
+Muchos teclados exponen una interfaz tipo mouse para ruedas de volumen, controles especiales, gestures raros, fallback de pointer o funciones de software propietario.
+
+Es feo, pero normal.
+
+USB HID es como una caja de herramientas vieja: todo cabe, nada sorprende y siempre hay un destornillador oxidado que nadie sabe quién puso ahí.
+
+---
+
+## Qué pinta `systemd-logind` aquí
+
+También aparecen líneas como estas:
+
+```text
+systemd-logind[1505]: Watching system buttons on /dev/input/event6 (F108Pro Dongle)
+systemd-logind[1505]: Watching system buttons on /dev/input/event8 (F108Pro Dongle)
+```
+
+`systemd-logind` vigila ciertos dispositivos de entrada para detectar botones de sistema, como power o sleep.
+
+Como el teclado se presenta como Apple, y los teclados Apple pueden reportar teclas de sistema, `logind` decide observar algunos de sus event devices.
+
+No significa que algo esté mal.
+
+Significa que Linux está diciendo:
+
+```text
+Este bicho quizá tenga botón de power. Mejor lo vigilo.
+```
+
+Linux siendo Linux: paranoico, detallista y medio intenso.
+
+---
+
+## Los warnings de XKB y GNOME
+
+Después de revisar el tema de `hid-apple`, seguían apareciendo otros warnings en GNOME Shell:
+
+```text
+gnome-shell[3895]: The XKEYBOARD keymap compiler (xkbcomp) reports:
+gnome-shell[3895]: > Warning: Multiple symbols for level 1/group 1 on key <FK23>
+gnome-shell[3895]: > Warning: Symbol map for key <FK23> redefined
+gnome-shell[3895]: > Warning: Symbol map for key <FK24> redefined
+gnome-shell[3895]: Errors from xkbcomp are not fatal to the X server
+
+gnome-shell[3896]: > Warning: Unsupported maximum keycode 709, clipping.
+gnome-shell[3896]: > X11 cannot support keycodes above 255.
+gnome-shell[3896]: > Warning: Virtual modifier Hyper multiply defined
+gnome-shell[3896]: > Warning: Virtual modifier ScrollLock multiply defined
+```
+
+Estos warnings asustan si los ves fuera de contexto, pero en este caso no eran el problema principal.
+
+Eran ruido adicional.
+
+---
+
+## `<FK23>` y `<FK24>` redefined
+
+XKB nombra las teclas con códigos de cuatro letras:
+
+- `<AC01>` es la fila de letras, columna 1. En QWERTY, la tecla `A`.
+- `<TLDE>` es la tecla de tilde.
+- `<ESC>` es Escape.
+- Las function keys van de `<FK01>` hasta `<FK24>`.
+
+Sí, F23 y F24 existen en el universo XKB, aunque tu teclado probablemente no tenga esas teclas físicamente.
+
+El F108Pro puede reportar algunas media keys o layered keys usando códigos que terminan mapeando a `<FK23>` y `<FK24>`.
+
+El layout XKB de `evdev` ya puede tener esos slots definidos para otra cosa, como `XF86Tools`, `XF86Launch5`, etc.
+
+Entonces `xkbcomp` ve dos definiciones para la misma tecla y se queja:
+
+```text
+Multiple symbols for level 1/group 1 on key <FK23>
+Symbol map for key <FK23> redefined
+```
+
+Pero no explota nada.
+
+Elige una definición, normalmente la última, y sigue.
+
+Las teclas funcionan; solo gana una de las definiciones.
+
+---
+
+## `maximum keycode 709, clipping`
+
+Otro warning interesante:
+
+```text
+Unsupported maximum keycode 709, clipping.
+X11 cannot support keycodes above 255.
+```
+
+El input subsystem del kernel Linux soporta keycodes bastante altos. Los fabricantes usan esos rangos para media keys, botones especiales, controles raros y toda esa fauna de “teclas gamer” que algún gerente de producto decidió meter.
+
+Mi F108Pro reportaba códigos hasta `709`.
+
+El problema es X11.
+
+X11 tiene un límite viejo: no puede representar keycodes por encima de `255`.
+
+Entonces `xkbcomp` recorta esos keycodes.
+
+En X11 puro, esas teclas altas podrían no funcionar. El kernel las recibe, pero se pierden al cruzar la frontera de X11.
+
+Pero en mi caso uso Wayland:
+
+```bash
+echo $XDG_SESSION_TYPE
+```
+
+Wayland no tiene ese límite de la misma forma, porque el compositor lee eventos de `evdev` directamente.
+
+Entonces, ¿por qué GNOME igual imprime el warning?
+
+Porque GNOME Shell todavía inicializa XKB para clientes XWayland. Y XWayland sigue cargando con las limitaciones viejas de X11, como una deuda técnica que nadie termina de pagar.
+
+---
+
+## Virtual modifiers duplicados
+
+También aparecen estos:
+
+```text
+Warning: Virtual modifier Hyper multiply defined
+Warning: Virtual modifier ScrollLock multiply defined
+```
+
+XKB tiene virtual modifiers como `Alt`, `Meta`, `Super`, `Hyper`, `NumLock`, `ScrollLock`.
+
+Si varias reglas de layout definen `Hyper` o `ScrollLock`, `xkbcomp` se queja porque ve duplicados.
+
+Pero otra vez: no significa que el teclado esté roto.
+
+Significa que XKB encontró definiciones duplicadas, se quejó como viejo mirando una obra, conservó una y siguió.
+
+---
+
+## Ruido de GNOME Settings Daemon
+
+También vi esto:
+
+```text
+gsd-keyboard[5316]: g_variant_unref: assertion 'value != NULL' failed
+```
+
+Suena feo.
+
+Parece bug.
+
+Parece que algo debería estar quemándose.
+
+Pero en este caso era ruido de inicialización del plugin de teclado de `gnome-settings-daemon`.
+
+El daemon se recupera, termina de arrancar y aplica la configuración del teclado normalmente.
+
+GNOME tropieza con una piedra, insulta en C y sigue caminando.
+
+---
+
+## El spam de keybinding overwrite
+
+Después de que Shell termina de cargar, aparecen decenas de líneas como estas:
+
+```text
+gnome-shell[5195]: Overwriting existing binding of keysym 31 with keysym 31 (keycode a).
+gnome-shell[5195]: Overwriting existing binding of keysym 36 with keysym 36 (keycode f).
+gnome-shell[5195]: Overwriting existing binding of keysym 34 with keysym 34 (keycode d).
+gnome-shell[5195]: Overwriting existing binding of keysym 39 with keysym 39 (keycode 12).
+```
+
+Esto no venía del teclado.
+
+Venía del sistema de shortcuts de GNOME Shell, que detectaba que varias cosas intentaban registrar el mismo `keysym/keycode`.
+
+Los keysyms como `31`, `36`, `34`, `39` están en hexadecimal:
+
+- `0x31` es `1`
+- `0x36` es `6`
+
+O sea, GNOME básicamente estaba diciendo:
+
+```text
+Estoy registrando otra vez esta tecla. Ya había algo aquí, pero bueno, lo piso.
+```
+
+La causa más probable: GNOME Workspace Switcher más extensiones que también usan `Super+1` hasta `Super+9`.
+
+En mi caso había varias candidatas:
+
+- `advanced-alt-tab`
+- `simple-workspaces-bar`
+- `wsmatrix`
+- `named-workspaces`
+- `workspace-indicator`
+
+Suficientes extensiones como para armar una guerra civil por los shortcuts de workspace.
+
+Los bindings funcionaban. Era ruido.
+
+---
+
+## Otros dispositivos que aparecían alrededor
+
+Mientras revisaba el journal, también aparecían otros dispositivos de entrada:
+
+| Device | Driver | USB ID | Path | Role |
+|---|---|---|---|---|
+| F108Pro Dongle | `hid-apple` | `05AC:024F` | `1-6.4.1` | Teclado principal, con 5 interfaces HID |
+| ASUS AURA LED Controller | `hid-generic` | `0B05:19AF` | `1-2` | Control RGB de la motherboard |
+| LG Monitor Controls | `hid-generic` | `043E:9A39` | `1-9.3` | Brillo DDC/CI por USB |
+| Logitech G522 LIGHTSPEED | `hid-generic` | `046D:0B18` | `1-6.4.2` | Receptor inalámbrico del headset |
+| Razer Naga Pro | `hid-generic` | `1532:0090` | `1-6.1.2` | Mouse; registra varias interfaces HID, incluyendo un falso teclado para macros |
+| RAZER Razer Mouse Dock | `hid-generic` | `1532:007E` | `1-6.1.3` | Dock de carga; también expone una interfaz de falso teclado |
+| Receiver Update | `hid-generic` | `1A34:F517` | `1-6.4.3` | Otro dongle en modo firmware update |
+
+Ese `Receiver Update` también era curioso. Vendor `1A34` suele apuntar a Holtek, así que probablemente algún receptor o dongle estaba en modo firmware-update.
+
+Interesante, pero no relacionado directamente con las F1–F12.
+
+Otro rabbit hole para otro día.
+
+---
+
+## USB topology cross-reference
+
+Otra cosa que se veía en los logs: el dongle F108Pro antes aparecía en una ruta USB y luego en otra.
+
+Por ejemplo:
+
+```text
+usb 1-6.1.1
+usb 1-6.4.1
+```
+
+Eso normalmente significa que lo moviste de un puerto del hub USB a otro.
+
+El kernel no se inmuta. Re-enumera el dispositivo, vuelve a cargar el driver correspondiente y listo.
+
+Pero el path deja ver la topología:
+
+- `0000:00:14.0` — controlador USB 3.x xHCI del chipset.
+- `usb1` — root hub bus 1.
+- `1-6` — puerto 6 del root hub.
+- `1-6.1`, `1-6.4` — puertos internos del hub conectado ahí.
+
+No era un problema.
+
+Solo otro detalle que aparece cuando empiezas a leer logs como si fueran novela policial.
+
+---
+
+## ¿Y si quisiera silenciar los warnings?
+
+La corrección importante era entender qué estaba pasando con `hid-apple`, `Fn`, `fnmode`, el initramfs y el firmware del teclado.
+
+Pero si igual quieres silenciar cosas, hay varias rutas.
+
+### Probar `fnmode`
+
+Puedes probar `fnmode`, pero no lo vendas como solución universal para este teclado.
+
+```bash
+echo 0 | sudo tee /sys/module/hid_apple/parameters/fnmode
+```
+
+Luego prueba F1–F12.
+
+Para volver al valor que dejé configurado:
+
+```bash
+echo 2 | sudo tee /sys/module/hid_apple/parameters/fnmode
+```
+
+Si el comportamiento cambia, entonces `hid-apple` sí está afectando esa interfaz.
+
+Si no cambia nada, probablemente el firmware del teclado está mandando directamente los códigos correctos y `fnmode` es decoración bonita en `/sys`.
+
+### Forzar `hid-generic`
+
+También podrías intentar que el teclado use `hid-generic` en vez de `hid-apple`, por ejemplo con reglas más específicas de `udev` o manejo de driver binding.
+
+Pero honestamente, eso ya es más delicado.
+
+Podrías romper comportamientos útiles o perder fixes futuros que lleguen a `hid-apple`.
+
+Para mi caso, entender cómo `hid-apple`, `fnmode`, el initramfs y el firmware se mezclaban era suficiente.
+
+No hace falta sacar una motosierra para cortar pan.
+
+### Parchear XKB
+
+Los warnings de `<FK23>`, `<FK24>` y modifiers duplicados vienen de archivos como:
+
+```text
+/usr/share/X11/xkb/symbols/
+```
+
+Podrías hacer overrides locales en:
+
+```text
+/etc/X11/xkb/
+```
+
+Pero eso es mantenimiento extra para silenciar warnings.
+
+Mucho trabajo para que el journal se vea bonito.
+
+Paso.
+
+### Desactivar extensiones de GNOME
+
+El spam de `"Overwriting existing binding"` se puede reducir quitando extensiones que pisan shortcuts de GNOME.
+
+Pero si las extensiones te sirven, puedes vivir con el ruido.
+
+A veces la solución madura no es “dejar todo sin warnings”.
+
+A veces la solución madura es entender qué mierda significa cada warning y dejar de perseguir fantasmas.
+
+---
+
+## Conclusión
+
+El problema parecía simple: mis teclas `F1`–`F12` dejaron de funcionar bien.
+
+Pero debajo había más capas:
+
+- El Aula F108Pro se presentaba como Apple Wireless Keyboard.
+- Linux cargaba `hid-apple`.
+- El driver buscaba una tecla `Fn` real en algunas interfaces.
+- En algunas no la encontraba, así que desactivaba el manejo especial de `Fn` para esas interfaces.
+- La interfaz principal no mostraba exactamente el mismo warning, así que `fnmode=2` podía seguir teniendo algún efecto.
+- El firmware del teclado también podía estar manejando internamente qué códigos HID mandar.
+- Como uso LUKS, necesitaba que la configuración de `hid_apple` estuviera disponible desde el initramfs.
+- Por eso el fix real fue crear `/etc/modprobe.d/hid_apple.conf` con `options hid_apple fnmode=2` y luego correr `sudo mkinitcpio -P`.
+- GNOME/XKB imprimía warnings adicionales que parecían graves, pero eran ruido.
+- Wayland, XWayland y X11 agregaban su propia deuda histórica al journal.
+
+Mi error inicial fue pensar que `fnmode` explicaba todo.
+
+La verdad era más fina:
+
+```text
+hid-apple sí estaba cargado, pero el comportamiento de las F1–F12 no estaba como yo quería.
+Por eso forcé fnmode=2 globalmente para el módulo hid_apple,
+regeneré el initramfs con mkinitcpio -P,
+reinicié,
+y recién ahí la configuración se aplicó correctamente desde el arranque.
+```
+
+Entonces la historia no era simplemente “cambia este parámetro y ya”.
+
+La historia era más Linux:
+
+```text
+El teclado se hacía pasar por Apple.
+Linux cargó hid-apple.
+Algunas interfaces olían a clon y apagaron parte de la magia Apple.
+El firmware del teclado también hacía lo suyo.
+Y como uso LUKS, tuve que meter la configuración en el initramfs.
+```
+
+El fix práctico fue:
+
+```bash
+echo 'options hid_apple fnmode=2' | sudo tee /etc/modprobe.d/hid_apple.conf
+sudo mkinitcpio -P
+sudo reboot
+```
+
+A veces un warning no es el problema.
+
+A veces es el sistema diciéndote: “tranquilo viejo, ya vi la estupidez”.
+
+La lección: un journal ruidoso no siempre significa que tu sistema esté roto. A veces solo significa que el sistema te está contando, con demasiado detalle, cómo está interpretando tu hardware raro.
+
+Leer esos mensajes, entender las capas y distinguir qué warning importa es más útil que perseguir la fantasía de “cero warnings”.
+
+Porque en Linux, muchas veces el fix no empieza instalando algo.
+
+Read the fucking LOGs.
