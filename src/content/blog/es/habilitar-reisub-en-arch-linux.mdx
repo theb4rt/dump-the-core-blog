@@ -1,0 +1,201 @@
+---
+title: "Habilita REISUB en Arch Linux"
+slug: "enable-reisub-arch-linux"
+description: "Magic SysRq viene casi desactivado en Arch. Así se activa REISUB para reiniciar correctamente cuando tu PC se cuelga, en vez de matar todo con el botón de encendido."
+pubDate: 2026-05-12
+category: "Linux"
+tags: ["arch", "linux", "sysrq", "reisub", "kernel", "freeze", "recovery", "sysctl"]
+featured: false
+author: "b4rt"
+lang: "es"
+translationKey: "enable-reisub-arch-linux"
+coverImage: "/images/posts/enable-reisub-arch-linux.webp"
+---
+
+import Callout from '../../../components/ui/Callout.astro';
+
+Si llevas suficiente tiempo usando Linux, ya te ha tocado alguna vez que se te crashee el sistema, puede ser Gnome, la pantalla, mouse pegado, teclado muerto, `Ctrl+Alt+F2` no responde. Normalmente es culpa de NVIDIA (fuck you). A veces es GNOME en Wayland. A veces simplemente un kernel con mal día.
+
+Entre tanta rabia, tal vez pienses en mantener pulsado el botón de encendido. No lo hagas viejo. El kernel tiene una salida más segura ya incorporada: **Magic SysRq** y la secuencia **REISUB**.
+
+¿Qué pasa en Arch? Viene deshabilitado por defecto.
+
+## ¿Qué es REISUB?
+
+REISUB es un mnemónico para seis pulsaciones de teclas Magic SysRq. Mantienes `Alt + SysRq` (la tecla `Print Screen` en la mayoría de teclados) y vas tocando cada letra en orden:
+
+| Tecla | Significa | Qué hace |
+|---|---|---|
+| **R** | un**R**aw | Recupera el control del teclado de X/Wayland |
+| **E** | t**E**rmina | Manda `SIGTERM` a todos los procesos (a las buenas) |
+| **I** | k**I**ll | Manda `SIGKILL` a todos los procesos (a las malas) |
+| **S** | **S**ync | Vuelca todos los datos al disco |
+| **U** | **U**mount | Remonta los sistemas de archivos en solo lectura |
+| **B** | re**B**oot | Reinicia inmediatamente |
+
+Así que cuando GNOME Shell, Mutter, el driver de NVIDIA, X/Wayland o cualquier otra mierda deje a tu PC atado de pies y manos, el kernel todavía puede seguir escuchándote; no como en Wincrash o Macrash.
+
+<Callout type="tip">
+  Espera aproximadamente un segundo entre cada tecla. El orden importa — primero sincronizas al disco y *después* reinicias, que es la diferencia entre "reinicio limpio" y "aventura con `fsck`".
+</Callout>
+
+---
+
+## Cuándo te hace falta de verdad
+
+Cuelgues reales que he visto sufrir a la gente:
+
+- **NVIDIA driver hangs.** `nvidia-drm` entra en deadlock después de suspender/reanudar, o después de que una carga de trabajo con Vulkan/CUDA se vaya al piso. Pantalla congelada, GPU sin responder.
+- **GNOME / Mutter wedges.** Especialmente en Wayland con monitores de distintas tasas de refresco, escalado fraccional, o esa extensión que olvidaste que habías instalado.
+- **OOM storms.** El OOM killer es famoso por no tener ninguna prisa. La máquina puede pasarse minutos triturando swap antes de volver a la vida.
+- **Filesystem stalls.** Un montaje NFS colgado, un SSD muriendo, o una unidad USB que agotó el tiempo de espera pueden bloquear cualquier cosa que toque I/O.
+- **Kernel regressions.** Pasa. Especialmente en una rolling release.
+
+REISUB te saca de cualquiera de estos escenarios de forma limpia. La alternativa es el botón de encendido, que te puede regalar:
+
+- Corrupción del filesystem (`ext4` y `btrfs` tienen opiniones fuertes sobre ser cortados a mitad de escritura).
+- Trabajo perdido en buffers sin guardar.
+- Un `fsck` largo en el siguiente arranque, o un journal replay que no termina de recuperar todo bien.
+
+---
+
+## ¿Por qué está desactivado por defecto en Arch?
+
+Hay dos cosas jugando en tu contra.
+
+Primero, el kernel. Arch compila su kernel con `CONFIG_MAGIC_SYSRQ_DEFAULT_ENABLE=0x0`, así que SysRq está apagado desde el momento en que arranca.
+
+Segundo, userspace. `/usr/lib/sysctl.d/50-default.conf` enviado por systemd define:
+
+```ini
+kernel.sysrq = 16
+```
+
+Ese `16` es un bitmask, y habilita únicamente `S` (Sync). La `S` en REISUB técnicamente funciona. La `R`, `E`, `I`, `U` y `B` no. Así que en una instalación fresca de Arch, REISUB no hace nada que vayas a notar.
+
+---
+
+## El bitmask, en corto
+
+`kernel.sysrq` puede ser `0` (apagado), `1` (todo activado), o una suma de estos bits:
+
+| Bit | Meaning |
+|---|---|
+| `2` | Control del console log level |
+| `4` | Control del keyboard (un-raw, SAK) |
+| `8` | Dumps de procesos |
+| `16` | Sync |
+| `32` | Remount read-only |
+| `64` | Señales a procesos (term, kill, OOM) |
+| `128` | Reboot / poweroff |
+| `256` | Renice de tareas RT |
+
+Suma lo que quieras, o simplemente usa `1`.
+
+---
+
+## Habilitarlo es in problema a nivel de seguridad?
+
+Más o menos, pero probablemente no para ti.
+
+Lo que alguien con acceso físico al teclado gana con `kernel.sysrq = 1`:
+
+- Reiniciar o apagar la máquina al instante.
+- Matar todos tus procesos, lo cual puede saltarse la pantalla de bloqueo si su objetivo es arruinar tu sesión.
+- Disparar un kernel crash dump o invocar el OOM killer.
+
+Lo que no gana:
+
+- No obtiene code execution.
+- No obtiene privilege escalation.
+- No puede leer archivos ni exfiltrar datos.
+- No puede saltarse disk encryption. LUKS igual pedirá tu passphrase en el siguiente arranque.
+
+Riesgo realista en una laptop personal: básicamente nada. Cualquiera con acceso físico ya puede mantener presionado el botón de encendido, desconectar la corriente o bootear desde un USB. REISUB no les entrega nada realmente nuevo.
+
+<Callout type="warning">
+  Donde sí importa: hardware compartido. Máquinas de laboratorio, kioscos, PCs de aula, servidores en racks sin llave. Cualquier lugar donde extraños puedan tocar el teclado, pero no deberían poder reiniciar a la fuerza o matar procesos. Ahí, déjalo restringido.
+</Callout>
+
+Para una máquina Arch de un solo usuario, `1` es la recomendación estándar.
+
+---
+
+## How to enable it
+
+Crea un archivo en `/etc/sysctl.d/` para sobrescribir el default de systemd.
+
+<Callout type="info">
+  No edites el archivo en `/usr/lib/sysctl.d/`: ese pertenece al package manager y se puede sobrescribir en una actualización. Cualquier cosa en `/etc/sysctl.d/` tiene prioridad.
+</Callout>
+
+```bash
+sudo tee /etc/sysctl.d/99-sysrq.conf <<'EOF'
+# Enable all Magic SysRq functions (REISUB available during freezes)
+kernel.sysrq = 1
+EOF
+```
+
+Aplícalo sin reiniciar:
+
+```bash
+sudo sysctl --system
+```
+
+Verifica:
+
+```bash
+cat /proc/sys/kernel/sysrq
+# 1
+```
+
+Listo. Se mantiene después de reiniciar y no se rompe con actualizaciones, porque `/etc/sysctl.d/` tiene prioridad.
+
+---
+
+## Trying it out
+
+Puedes probar que SysRq está conectado sin reiniciar nada:
+
+```bash
+echo t | sudo tee /proc/sysrq-trigger
+```
+
+Luego revisa `dmesg`. Deberías ver un dump del estado de todas las tareas. Si el output está ahí, está funcionando.
+
+Para probar el combo real de teclas, la letra segura es `H` ("help"). Solo imprime la lista de comandos disponibles en el kernel log:
+
+```bash
+dmesg | tail
+```
+
+---
+
+## How to actually use REISUB in a freeze
+
+Cuando el sistema se bloquee:
+
+1. Mantén presionado `Alt` y `SysRq` (`PrtSc`). No los sueltes.
+2. Presiona cada letra en orden, con aproximadamente un segundo entre cada una:
+
+   ```
+   R → E → I → S → U → B
+   ```
+
+3. La máquina se reinicia limpiamente.
+
+Mnemonic: **"Reboot Even If System Utterly Broken."** O, al revés, **"BUSIER."** Usa el que se te quede.
+
+<Callout type="tip">
+  ¿Quieres un apagado limpio sin reiniciar? Usa `O` (poweroff) al final en lugar de `B`: **REISUO**.
+</Callout>
+
+---
+
+## On laptops without a SysRq key
+
+Muchas laptops esconden `SysRq` detrás de `Fn`. Entonces el combo se vuelve `Fn + Alt + PrtSc` mientras presionas cada letra. Prueba primero con `H`, para conocer el chord exacto de tu teclado antes de necesitarlo en una emergencia.
+
+---
+
+**TL;DR** — Arch trae Magic SysRq casi deshabilitado (`kernel.sysrq = 16`, solo sync). Una línea en `/etc/sysctl.d/` lo cambia a `1`, y REISUB se convierte en tu salida la próxima vez que NVIDIA, GNOME o el kernel decidan que hoy es el día.
